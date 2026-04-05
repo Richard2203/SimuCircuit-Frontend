@@ -7,6 +7,7 @@ import { DiodoRectificador } from './components/Simulator/models/diodoRectificad
 import { ZenerDiode } from './components/Simulator/models/ZenerDiode.jsx';
 import { Transistor } from './components/Simulator/models/Transistor.jsx';
 import { TransistorTO92 } from './components/Simulator/models/TransistorTO92.jsx';
+import { Node } from './components/Simulator/models/Node.jsx';
 
 const App = () => {
   return (
@@ -76,6 +77,12 @@ const App = () => {
           nodeA="vcc" 
           nodeB="gnd" 
           label="Fuente de Poder" 
+        />
+
+        <Node 
+          id="nodo1" 
+          x={200} 
+          y={500} 
         />
       </svg>
     </div>
