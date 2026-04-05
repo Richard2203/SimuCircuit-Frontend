@@ -1,7 +1,9 @@
 import React from 'react';
-import { Capacitor } from './components/Simulator/models/capacitor';
-import { Resistor } from './components/Simulator/models/resistor';
-import { PowerSource } from './components/Simulator/models/PowerSource';
+import { Capacitor } from './components/Simulator/models/capacitor.jsx';
+import { Resistor } from './components/Simulator/models/resistor.jsx';
+import PowerSource from './components/Simulator/models/PowerSource.jsx';
+import { LED } from './components/Simulator/models/led.jsx';
+import { DiodoRectificador } from './components/Simulator/models/diodoRectificador.jsx';
 
 const App = () => {
   return (
@@ -26,15 +28,22 @@ const App = () => {
           nodeB="nodo2" 
         />
 
-        {/* Así llamas a la nueva fuente de poder */}
-        <PowerSource 
-          x={500} 
-          y={150} 
-          nodeA="vcc" 
-          nodeB="gnd" 
-          label="Main Supply" 
+        <LED
+            x={450} 
+            y={300} 
+            nodeA="nodo_anodo"   // Pin positivo (pata larga / post interno)
+            nodeB="nodo_catodo"  // Pin negativo (pata con curva / anvil interno)
+            color="#2ecc71"      // Puedes cambiarlo a otro verde o color si quieres
+            isOn={true}          // Opcional: para controlar si brilla o no
         />
-        {/* puedes tener 500 componentes sin ningún problema de rendimiento */}
+
+        <DiodoRectificador
+          x={400} 
+          y={200} 
+          nodeA="anodo_diodo" 
+          nodeB="catodo_diodo"
+        />
+
       </svg>
     </div>
   );
