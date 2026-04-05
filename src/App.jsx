@@ -6,6 +6,7 @@ import { LED } from './components/Simulator/models/led.jsx';
 import { DiodoRectificador } from './components/Simulator/models/diodoRectificador.jsx';
 import { ZenerDiode } from './components/Simulator/models/ZenerDiode.jsx';
 import { Transistor } from './components/Simulator/models/Transistor.jsx';
+import { TransistorTO92 } from './components/Simulator/models/TransistorTO92.jsx';
 
 const App = () => {
   return (
@@ -59,6 +60,14 @@ const App = () => {
           nodeAdj="linea_ajuste" 
           nodeOut="v_out_regulada" 
           nodeIn="v_in_fuente" 
+        />
+
+        <TransistorTO92 
+          x={400} 
+          y={200} 
+          nodeE="linea_emisor"   // Pata Izquierda
+          nodeB="señal_base"     // Pata Central
+          nodeC="vcc_colector"   // Pata Derecha
         />
 
       </svg>
