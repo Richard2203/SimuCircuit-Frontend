@@ -5,6 +5,7 @@ import PowerSource from './components/Simulator/models/PowerSource.jsx';
 import { LED } from './components/Simulator/models/led.jsx';
 import { DiodoRectificador } from './components/Simulator/models/diodoRectificador.jsx';
 import { ZenerDiode } from './components/Simulator/models/ZenerDiode.jsx';
+import { Transistor } from './components/Simulator/models/Transistor.jsx';
 
 const App = () => {
   return (
@@ -50,6 +51,14 @@ const App = () => {
           y={200} 
           nodeA="anodo_zener" 
           nodeB="catodo_zener"
+        />
+
+        <Transistor 
+          x={500} 
+          y={300} 
+          nodeAdj="linea_ajuste" 
+          nodeOut="v_out_regulada" 
+          nodeIn="v_in_fuente" 
         />
 
       </svg>
