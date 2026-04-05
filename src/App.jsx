@@ -1,7 +1,7 @@
 import React from 'react';
 import { Capacitor } from './components/Simulator/models/capacitor.jsx';
 import { Resistor } from './components/Simulator/models/resistor.jsx';
-import PowerSource from './components/Simulator/models/PowerSource.jsx';
+import { PowerSource } from './components/Simulator/models/PowerSource.jsx';
 import { LED } from './components/Simulator/models/led.jsx';
 import { DiodoRectificador } from './components/Simulator/models/diodoRectificador.jsx';
 import { ZenerDiode } from './components/Simulator/models/ZenerDiode.jsx';
@@ -70,6 +70,13 @@ const App = () => {
           nodeC="vcc_colector"   // Pata Derecha
         />
 
+        <PowerSource 
+          x={150} 
+          y={370} 
+          nodeA="vcc" 
+          nodeB="gnd" 
+          label="Fuente de Poder" 
+        />
       </svg>
     </div>
   );

@@ -1,120 +1,126 @@
-import React from 'react';
+export const PowerSource = ({
+  nodeA = 'vcc',
+  nodeB = 'gnd',
+  label = 'Power Source',
+  x = 0,
+  y = 0,
+}) => {
+  const id = `power-${x}-${y}`
 
-const PowerSource = ({ x = 0, y = 0, width = 160, redNodeId, blackNodeId }) => {
-  const w = parseFloat(width);
-  const h = w * 0.6; // Altura de la cara superior
-  const sideH = w * 0.35; // Altura del grosor (profundidad)
-
-  // Nodos de conexión (exactamente en las puntas de los cables)
-  const redNodePos = { x: x + w + 50, y: y + sideH + 10 };
-  const blackNodePos = { x: x + w + 35, y: y + sideH + 45 };
+  // Puntos de conexión absolutos para el sistema de cables
+  const pinA = { x: x + 469, y: y + 68  }  // punta cable rojo (+)
+  const pinB = { x: x + 479, y: y + 220 }  // punta cable negro (-)
 
   return (
-    <g transform={`translate(${x}, ${y})`}>
+    <g data-node-a={nodeA} data-node-b={nodeB}>
       <defs>
-        {/* Material Negro Mate con textura de luz */}
-        <linearGradient id="topGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#3a3d40" />
-          <stop offset="100%" stopColor="#1a1c1e" />
+        <linearGradient id={`${id}-top`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stopColor="#4a4a4a"/>
+          <stop offset="50%"  stopColor="#2e2e2e"/>
+          <stop offset="100%" stopColor="#1a1a1a"/>
         </linearGradient>
-
-        {/* Cara frontal (más oscura para profundidad) */}
-        <linearGradient id="frontGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#232629" />
-          <stop offset="100%" stopColor="#0a0b0c" />
+        <linearGradient id={`${id}-front`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stopColor="#2a2a2a"/>
+          <stop offset="100%" stopColor="#0d0d0d"/>
         </linearGradient>
-
-        {/* Brillo en los bordes para realismo industrial */}
-        <linearGradient id="edgeHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.15)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        <linearGradient id={`${id}-side`} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#1a1a1a"/>
+          <stop offset="100%" stopColor="#0a0a0a"/>
         </linearGradient>
+        <linearGradient id={`${id}-text`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stopColor="#aaaaaa"/>
+          <stop offset="40%"  stopColor="#dddddd"/>
+          <stop offset="100%" stopColor="#888888"/>
+        </linearGradient>
+        <radialGradient id={`${id}-screw`} cx="35%" cy="35%" r="60%">
+          <stop offset="0%"   stopColor="#666"/>
+          <stop offset="100%" stopColor="#222"/>
+        </radialGradient>
       </defs>
 
-      {/* 1. SOMBRA PROYECTADA (Sutil y difusa) */}
-      <path
-        d={`M 10 ${h + 20} L ${w + 10} ${h + sideH + 20} L ${w + 60} ${h + sideH} L 50 ${h - 10} Z`}
-        fill="rgba(0,0,0,0.2)"
-        filter="blur(8px)"
-      />
+      <g transform={`translate(${x}, ${y})`}>
 
-      {/* 2. CUERPO - CARA FRONTAL IZQUIERDA */}
-      <path
-        d={`M 0 ${h/2} L 0 ${h/2 + sideH} L ${w/2} ${h + sideH} L ${w/2} ${h} Z`}
-        fill="#121416"
-      />
+        {/* Cara lateral derecha */}
+        <path d="M 484,55 L 500,43 L 500,228 L 484,218 Z"
+          fill={`url(#${id}-side)`} stroke="#000" strokeWidth="1"/>
+        {/* Cara superior lateral */}
+        <path d="M 484,55 L 500,43 L 500,55 L 484,67 Z"
+          fill="#383838" stroke="#000" strokeWidth="0.8"/>
+        {/* Cara frontal */}
+        <path d="M 106,67 L 484,67 L 484,218 L 106,218 Z"
+          fill={`url(#${id}-front)`} stroke="#000" strokeWidth="1"/>
+        {/* Cara superior */}
+        <path d="M 106,43 L 484,43 L 484,67 L 106,67 Z"
+          fill={`url(#${id}-top)`} stroke="#000" strokeWidth="1"/>
 
-      {/* 3. CUERPO - CARA FRONTAL DERECHA */}
-      <path
-        d={`M ${w/2} ${h} L ${w/2} ${h + sideH} L ${w} ${h/2 + sideH} L ${w} ${h/2} Z`}
-        fill="url(#frontGrad)"
-      />
+        {/* Borde superior */}
+        <rect x="106" y="38" width="378" height="8" rx="3"
+          fill="#111" stroke="#000" strokeWidth="0.5"/>
+        <path d="M 484,38 L 500,28 L 500,43 L 484,46 Z"
+          fill="#0d0d0d" stroke="#000" strokeWidth="0.5"/>
 
-      {/* 4. CARA SUPERIOR (El rombo principal) */}
-      <path
-        d={`M 0 ${h/2} L ${w/2} 0 L ${w} ${h/2} L ${w/2} ${h} Z`}
-        fill="url(#topGrad)"
-        stroke="#000"
-        strokeWidth="0.5"
-      />
+        {/* Borde inferior — igual al superior */}
+        <rect x="106" y="218" width="378" height="8" rx="3"
+          fill="#111" stroke="#000" strokeWidth="0.5"/>
+        <path d="M 484,218 L 500,208 L 500,226 L 484,226 Z"
+          fill="#0d0d0d" stroke="#000" strokeWidth="0.5"/>
 
-      {/* 5. BISEL/BORDE DE LUZ (Lo que le da el toque "Apple") */}
-      <path
-        d={`M 0 ${h/2} L ${w/2} ${h} L ${w} ${h/2}`}
-        fill="none"
-        stroke="url(#edgeHighlight)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
+        {/* Texto */}
+        <text x="295" y="152" fontSize="30" fontWeight="bold"
+          fontFamily="Arial, sans-serif" fill="#000"
+          textAnchor="middle" opacity="0.5">{label}</text>
+        <text x="295" y="150" fontSize="30" fontWeight="bold"
+          fontFamily="Arial, sans-serif" fill={`url(#${id}-text)`}
+          textAnchor="middle" letterSpacing="1">{label}</text>
 
-      {/* ETIQUETA - Centrada en perspectiva */}
-      <text
-        x={w / 2}
-        y={h / 2}
-        fill="rgba(255,255,255,0.4)"
-        fontFamily="sans-serif"
-        fontWeight="bold"
-        fontSize={w / 12}
-        textAnchor="middle"
-        transform={`skewY(15) translate(0, -5)`}
-        style={{ pointerEvents: 'none', letterSpacing: '1px' }}
-      >
-        POWER SOURCE
-      </text>
+        {/* Tornillos */}
+        {[
+          { cx: 136, cy: 88  },
+          { cx: 454, cy: 88  },
+          { cx: 136, cy: 198 },
+          { cx: 454, cy: 198 },
+        ].map(({ cx, cy }) => (
+          <g key={`${cx}-${cy}`}>
+            <circle cx={cx} cy={cy} r="9"
+              fill={`url(#${id}-screw)`} stroke="#000" strokeWidth="0.8"/>
+            <line x1={cx-6} y1={cy} x2={cx+6} y2={cy} stroke="#111" strokeWidth="1.5"/>
+            <line x1={cx} y1={cy-6} x2={cx} y2={cy+6} stroke="#111" strokeWidth="1.5"/>
+          </g>
+        ))}
 
-      {/* TORNILLOS/ARANDELAS */}
-      <circle cx={w * 0.5} cy={h * 0.15} r={w/30} fill="#111" stroke="#444" />
-      <circle cx={w * 0.5} cy={h * 0.85} r={w/30} fill="#111" stroke="#444" />
+        {/* Indicadores triángulo */}
+        <path d="M 480,122 L 488,128 L 480,134 Z" fill="#555"/>
+        <path d="M 480,152 L 488,158 L 480,164 Z" fill="#555"/>
 
-      {/* 6. CABLES CON CURVATURA NATURAL */}
-      <g>
-        {/* Cable Negro */}
-        <path
-          d={`M ${w * 0.9} ${h * 0.4} C ${w + 20} ${h * 0.4}, ${w + 40} ${h + 20}, ${blackNodePos.x - x} ${blackNodePos.y - y}`}
-          fill="none"
-          stroke="#111"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-        {/* Cable Rojo */}
-        <path
-          d={`M ${w * 0.85} ${h * 0.35} C ${w + 30} ${h * 0.35}, ${w + 60} ${h}, ${redNodePos.x - x} ${redNodePos.y - y}`}
-          fill="none"
-          stroke="#d32f2f"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-        
-        {/* Puntas de cobre */}
-        <circle cx={blackNodePos.x - x} cy={blackNodePos.y - y} r="3" fill="#cd7f32" />
-        <circle cx={redNodePos.x - x} cy={redNodePos.y - y} r="3" fill="#cd7f32" />
+        {/* Cable rojo (VCC) — forma L */}
+        <path d="M 500,128 L 575,128 L 575,80"
+          fill="none" stroke="#333" strokeWidth="9"
+          strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M 500,128 L 575,128 L 575,80"
+          fill="none" stroke="#cc1111" strokeWidth="6"
+          strokeLinecap="round" strokeLinejoin="round"/>
+        <line x1="575" y1="80" x2="575" y2="70"
+          stroke="#b87333" strokeWidth="5" strokeLinecap="round"/>
+        <circle cx="575" cy="68" r="3.5"
+          fill="#d4943a" stroke="#996620" strokeWidth="0.8"/>
 
-        {/* NODOS INVISIBLES DE CONEXIÓN */}
-        <circle id={redNodeId} cx={redNodePos.x - x} cy={redNodePos.y - y} r="8" fill="transparent" style={{cursor: 'crosshair'}} />
-        <circle id={blackNodeId} cx={blackNodePos.x - x} cy={blackNodePos.y - y} r="8" fill="transparent" style={{cursor: 'crosshair'}} />
+        {/* Cable negro (GND) — forma L */}
+        <path d="M 500,158 L 585,158 L 585,208"
+          fill="none" stroke="#333" strokeWidth="9"
+          strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M 500,158 L 585,158 L 585,208"
+          fill="none" stroke="#222" strokeWidth="6"
+          strokeLinecap="round" strokeLinejoin="round"/>
+        <line x1="585" y1="208" x2="585" y2="218"
+          stroke="#b87333" strokeWidth="5" strokeLinecap="round"/>
+        <circle cx="585" cy="220" r="3.5"
+          fill="#d4943a" stroke="#996620" strokeWidth="0.8"/>
+
       </g>
-    </g>
-  );
-};
 
-export default PowerSource; 
+      {/* Puntos de conexión invisibles para el sistema de cables */}
+      <circle cx={pinA.x} cy={pinA.y} r="4" fill="transparent" data-pin="a"/>
+      <circle cx={pinB.x} cy={pinB.y} r="4" fill="transparent" data-pin="b"/>
+    </g>
+  )
+}
