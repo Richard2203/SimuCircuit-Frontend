@@ -4,6 +4,7 @@ import { Resistor } from './components/Simulator/models/resistor.jsx';
 import PowerSource from './components/Simulator/models/PowerSource.jsx';
 import { LED } from './components/Simulator/models/led.jsx';
 import { DiodoRectificador } from './components/Simulator/models/diodoRectificador.jsx';
+import { ZenerDiode } from './components/Simulator/models/ZenerDiode.jsx';
 
 const App = () => {
   return (
@@ -42,6 +43,13 @@ const App = () => {
           y={200} 
           nodeA="anodo_diodo" 
           nodeB="catodo_diodo"
+        />
+
+        <ZenerDiode
+          x={600} 
+          y={200} 
+          nodeA="anodo_zener" 
+          nodeB="catodo_zener"
         />
 
       </svg>
