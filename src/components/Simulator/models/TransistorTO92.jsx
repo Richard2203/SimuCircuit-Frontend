@@ -1,15 +1,26 @@
 // TransistorTO92.jsx
+import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js'
+
 export const TransistorTO92 = ({
   nodeE = 'emisor1', nodeB = 'base1', nodeC = 'colector1',
   x = 0, y = 0,
   orientation = 'vertical',
+  scale = COMPONENT_SCALE.transistorTO92,
 }) => {
   const id = `transistor-${x}-${y}`
   const rotate = orientation === 'horizontal' ? -90 : 0
 
   const pins = orientation === 'vertical'
-    ? { e: { x: x - 15, y: y + 60 }, b: { x: x, y: y + 60 }, c: { x: x + 15, y: y + 60 } }
-    : { e: { x: x - 60, y: y - 15 }, b: { x: x - 60, y: y }, c: { x: x - 60, y: y + 15 } }
+    ? {
+        e: { x: x - 15 * scale, y: y + 60 * scale },
+        b: { x: x,              y: y + 60 * scale },
+        c: { x: x + 15 * scale, y: y + 60 * scale },
+      }
+    : {
+        e: { x: x - 60 * scale, y: y - 15 * scale },
+        b: { x: x - 60 * scale, y: y },
+        c: { x: x - 60 * scale, y: y + 15 * scale },
+      }
 
   return (
     <g data-node-e={nodeE} data-node-b={nodeB} data-node-c={nodeC}>
@@ -25,7 +36,7 @@ export const TransistorTO92 = ({
           <stop offset="100%" stopColor="#111"/>
         </linearGradient>
       </defs>
-      <g transform={`translate(${x}, ${y}) rotate(${rotate})`}>
+      <g transform={`translate(${x}, ${y}) rotate(${rotate}) scale(${scale})`}>
         <g stroke="#9f9f9f" strokeWidth="6" strokeLinecap="round">
           <line x1="-15" y1="12" x2="-15" y2="60"/>
           <line x1="0"   y1="12" x2="0"   y2="60"/>

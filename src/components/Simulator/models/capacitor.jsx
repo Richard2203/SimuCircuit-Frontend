@@ -1,3 +1,6 @@
+// Capacitor.jsx
+import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js'
+
 export const Capacitor = ({
   nodeA = 'node1',
   nodeB = 'node2',
@@ -5,23 +8,19 @@ export const Capacitor = ({
   voltage = '25V',
   x = 0,
   y = 0,
-  orientation = 'vertical', // 'vertical' | 'horizontal'
+  orientation = 'vertical',
+  scale = COMPONENT_SCALE.capacitor,
 }) => {
   const id = `cap-${x}-${y}`
+  const rotate = orientation === 'horizontal' ? 90 : 0
 
-  // Los pines cambian según orientación
-  // Vertical:    pines salen hacia abajo (izq y der)
-  // Horizontal:  pines salen hacia los lados (arr y abajo)
   const pinA = orientation === 'vertical'
-    ? { x: x - 24, y: y + 108 }  // abajo-izquierda
-    : { x: x - 108, y: y - 24 }  // izquierda-arriba
+    ? { x: x - 24 * scale, y: y + 108 * scale }
+    : { x: x - 108 * scale, y: y - 24 * scale }
 
   const pinB = orientation === 'vertical'
-    ? { x: x + 23, y: y + 108 }  // abajo-derecha
-    : { x: x + 108, y: y + 23 }  // derecha-abajo
-
-  // Rotación: vertical = 0°, horizontal = 90°
-  const rotate = orientation === 'horizontal' ? 90 : 0
+    ? { x: x + 23 * scale, y: y + 108 * scale }
+    : { x: x + 108 * scale, y: y + 23 * scale }
 
   return (
     <g data-node-a={nodeA} data-node-b={nodeB}>
@@ -65,70 +64,41 @@ export const Capacitor = ({
         </clipPath>
       </defs>
 
-      {/* Todo el SVG se rota desde el centro del componente */}
-      <g transform={`translate(${x}, ${y}) rotate(${rotate})`}>
-
-        {/* PINES */}
-        <rect x="-28" y="83"  width="9" height="48" rx="4" fill={`url(#${id}-pin)`}/>
-        <rect x="19"  y="83"  width="9" height="48" rx="4" fill={`url(#${id}-pin)`}/>
+      <g transform={`translate(${x}, ${y}) rotate(${rotate}) scale(${scale})`}>
+        <rect x="-28" y="83"  width="9"   height="48" rx="4" fill={`url(#${id}-pin)`}/>
+        <rect x="19"  y="83"  width="9"   height="48" rx="4" fill={`url(#${id}-pin)`}/>
         <rect x="-25" y="83"  width="2.5" height="48" rx="1" fill="#fff" opacity="0.15"/>
         <rect x="22"  y="83"  width="2.5" height="48" rx="1" fill="#fff" opacity="0.15"/>
-
-        {/* CUERPO */}
         <path d="M -58,-85 L 58,-85 L 58,53 Q 58,90 0,90 Q -58,90 -58,53 Z"
           fill={`url(#${id}-body)`} stroke="#0a0a0a" strokeWidth="1"/>
-
-        {/* FRANJA gris */}
         <rect x="-40" y="-85" width="38" height="175"
           fill={`url(#${id}-stripe)`} clipPath={`url(#${id}-cap-shape)`}/>
-
-        {/* Línea separadora franja */}
         <line x1="-2" y1="-83" x2="-2" y2="67"
           stroke="#222" strokeWidth="1.2" opacity="0.9"/>
-
-        {/* Bordes laterales oscuros */}
         <rect x="-58" y="-85" width="9" height="175"
           fill="#000" opacity="0.55" clipPath={`url(#${id}-cap-shape)`}/>
         <rect x="49"  y="-85" width="9" height="175"
           fill="#000" opacity="0.5"  clipPath={`url(#${id}-cap-shape)`}/>
-
-        {/* ARO inferior — solo arco frontal */}
         <path d="M -58,53 A 58,10 0 0 0 58,53"
           fill="none" stroke="#0d0d0d" strokeWidth="5" strokeLinecap="round"/>
-
-        {/* ARO superior */}
         <ellipse cx="0" cy="-81" rx="60" ry="16"
           fill={`url(#${id}-rim)`} stroke="#050505" strokeWidth="0.5"/>
-
-        {/* TAPA superior */}
         <ellipse cx="0" cy="-87" rx="58" ry="18"
           fill={`url(#${id}-top)`} stroke="#2a2a2a" strokeWidth="0.8"/>
         <ellipse cx="0" cy="-87" rx="58" ry="18"
           fill={`url(#${id}-shine)`}/>
-
-        {/* CRUZ en la tapa */}
         <g clipPath={`url(#${id}-top-clip)`}>
           <line x1="-58" y1="-87" x2="58" y2="-87"
             stroke="#444" strokeWidth="3.5" strokeLinecap="round"/>
           <line x1="0" y1="-105" x2="0" y2="-69"
             stroke="#444" strokeWidth="3.5" strokeLinecap="round"/>
         </g>
-
-        {/* Etiquetas — se contra-rotan para que siempre se lean horizontal */}
-        <text
-          x="66" y="-10"
-          fontSize="11" fill="#777" fontFamily="monospace"
-          transform={`rotate(${-rotate})`}
-        >{value}</text>
-        <text
-          x="66" y="6"
-          fontSize="10" fill="#555" fontFamily="monospace"
-          transform={`rotate(${-rotate})`}
-        >{voltage}</text>
-
+        <text x="66" y="-10" fontSize="11" fill="#777" fontFamily="monospace"
+          transform={`rotate(${-rotate})`}>{value}</text>
+        <text x="66" y="6"   fontSize="10" fill="#555" fontFamily="monospace"
+          transform={`rotate(${-rotate})`}>{voltage}</text>
       </g>
 
-      {/* Puntos de conexión — coordenadas absolutas ya calculadas arriba */}
       <circle cx={pinA.x} cy={pinA.y} r="3" fill="transparent" data-pin="a"/>
       <circle cx={pinB.x} cy={pinB.y} r="3" fill="transparent" data-pin="b"/>
     </g>

@@ -1,15 +1,17 @@
+import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js'
 export const PowerSource = ({
   nodeA = 'vcc',
   nodeB = 'gnd',
   label = 'Power Source',
   x = 0,
   y = 0,
+  scale = COMPONENT_SCALE.powerSource,
 }) => {
   const id = `power-${x}-${y}`
 
   // Puntos de conexión absolutos para el sistema de cables
-  const pinA = { x: x + 469, y: y + 68  }  // punta cable rojo (+)
-  const pinB = { x: x + 479, y: y + 220 }  // punta cable negro (-)
+  const pinA = { x: x + 469 * scale, y: y + 68 * scale  }  // punta cable rojo (+)
+  const pinB = { x: x + 479 * scale, y: y + 220 * scale }  // punta cable negro (-)
 
   return (
     <g data-node-a={nodeA} data-node-b={nodeB}>
@@ -38,7 +40,7 @@ export const PowerSource = ({
         </radialGradient>
       </defs>
 
-      <g transform={`translate(${x}, ${y})`}>
+      <g transform={`translate(${x}, ${y}) scale(${scale})`}>
 
         {/* Cara lateral derecha */}
         <path d="M 484,55 L 500,43 L 500,228 L 484,218 Z"

@@ -1,18 +1,29 @@
-// Transistor.jsx (el de disipador grande)
+// Transistor.jsx
+import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js'
+
 export const Transistor = ({
   nodeIn = 'in', nodeAdj = 'adj', nodeOut = 'out',
   x = 0, y = 0,
   orientation = 'vertical',
+  scale = COMPONENT_SCALE.transistor,
 }) => {
   const rotate = orientation === 'horizontal' ? -90 : 0
 
-  const pinsBase = orientation === 'vertical'
-    ? { adj: { x: x - 15, y: y + 60 }, out: { x: x, y: y + 60 }, in: { x: x + 15, y: y + 60 } }
-    : { adj: { x: x - 60, y: y - 15 }, out: { x: x - 60, y: y }, in: { x: x - 60, y: y + 15 } }
+  const pins = orientation === 'vertical'
+    ? {
+        adj: { x: x - 15 * scale, y: y + 60 * scale },
+        out: { x: x,              y: y + 60 * scale },
+        in:  { x: x + 15 * scale, y: y + 60 * scale },
+      }
+    : {
+        adj: { x: x - 60 * scale, y: y - 15 * scale },
+        out: { x: x - 60 * scale, y: y },
+        in:  { x: x - 60 * scale, y: y + 15 * scale },
+      }
 
   return (
     <g data-node-in={nodeIn} data-node-adj={nodeAdj} data-node-out={nodeOut}>
-      <g transform={`translate(${x}, ${y}) rotate(${rotate})`}>
+      <g transform={`translate(${x}, ${y}) rotate(${rotate}) scale(${scale})`}>
         <path d="M -25,-10 L 25,-10 L 25,-45 L 15,-55 L -15,-55 L -25,-45 Z" fill="#b3b3b3"/>
         <circle cx="0" cy="-35" r="7" fill="#666"/>
         <circle cx="0" cy="-35" r="5" fill="#f4f4f4" opacity="0.3"/>
@@ -28,9 +39,9 @@ export const Transistor = ({
           <line x1="-15" y1="8" x2="15" y2="8"/>
         </g>
       </g>
-      <circle cx={pinsBase.adj.x} cy={pinsBase.adj.y} r="5" fill="transparent" data-pin="adj"/>
-      <circle cx={pinsBase.out.x} cy={pinsBase.out.y} r="5" fill="transparent" data-pin="out"/>
-      <circle cx={pinsBase.in.x}  cy={pinsBase.in.y}  r="5" fill="transparent" data-pin="in"/>
+      <circle cx={pins.adj.x} cy={pins.adj.y} r="5" fill="transparent" data-pin="adj"/>
+      <circle cx={pins.out.x} cy={pins.out.y} r="5" fill="transparent" data-pin="out"/>
+      <circle cx={pins.in.x}  cy={pins.in.y}  r="5" fill="transparent" data-pin="in"/>
     </g>
   )
 }
