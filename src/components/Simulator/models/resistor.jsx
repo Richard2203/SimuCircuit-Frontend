@@ -9,6 +9,7 @@ const colorCodeMap = {
   grey:   { color: '#808080' }, white:  { color: '#FFFFFF' },
   gold:   { color: '#CFB53B' }, silver: { color: '#C0C0C0' },
 }
+
 const getSVGColor = (c) => colorCodeMap[c?.toLowerCase()]?.color || c || 'transparent'
 
 export const Resistor = ({
@@ -21,16 +22,19 @@ export const Resistor = ({
   scale = COMPONENT_SCALE.resistor,
 }) => {
   const id = `resistor-${x}-${y}`
-  const pinDrop = 50
   const rotate = orientation === 'vertical' ? 90 : 0
+  
+  // Longitud de la pata recta desde el centro
+  const armLength = 100; 
 
+  // Puntos de conexión: ahora están en el mismo eje Y (o X si es vertical)
   const pinA = orientation === 'horizontal'
-    ? { x: x - 75 * scale, y: y + pinDrop * scale }
-    : { x: x - pinDrop * scale, y: y - 75 * scale }
+    ? { x: x - armLength * scale, y: y }
+    : { x: x, y: y - armLength * scale }
 
   const pinB = orientation === 'horizontal'
-    ? { x: x + 75 * scale, y: y + pinDrop * scale }
-    : { x: x + pinDrop * scale, y: y + 75 * scale }
+    ? { x: x + armLength * scale, y: y }
+    : { x: x, y: y + armLength * scale }
 
   const resistorPath = `
     M -60,0 C -60,-28 -40,-25 -20,-18 L 20,-18
@@ -59,28 +63,35 @@ export const Resistor = ({
       </defs>
 
       <g transform={`translate(${x}, ${y}) rotate(${rotate}) scale(${scale})`}>
-        <rect x="-78" y="-3" width="20" height="6" rx="2" fill={`url(#${id}-pin-grad)`}/>
-        <rect x="58"  y="-3" width="20" height="6" rx="2" fill={`url(#${id}-pin-grad)`}/>
-        <circle cx="-75" cy="3" r="3" fill="#888"/>
-        <circle cx="75"  cy="3" r="3" fill="#888"/>
-        <rect x="-78" y="0" width="6" height={pinDrop} rx="3" fill={`url(#${id}-pin-grad)`}/>
-        <rect x="72"  y="0" width="6" height={pinDrop} rx="3" fill={`url(#${id}-pin-grad)`}/>
+        {/* Pata Izquierda Recta */}
+        <rect x="-100" y="-3" width="45" height="6" rx="2" fill={`url(#${id}-pin-grad)`}/>
+        {/* Pata Derecha Recta */}
+        <rect x="55" y="-3" width="45" height="6" rx="2" fill={`url(#${id}-pin-grad)`}/>
+        
+        {/* Cuerpo de la resistencia */}
         <path d={resistorPath} fill={`url(#${id}-body-grad)`}/>
+        
+        {/* Bandas de color */}
         <g clipPath={`url(#${id}-clip)`}>
           <rect x="-52" y="-30" width="10" height="60" fill={getSVGColor(band1)}/>
           <rect x="-35" y="-30" width="8"  height="60" fill={getSVGColor(band2)}/>
           <rect x="-15" y="-30" width="8"  height="60" fill={getSVGColor(band3)}/>
           <rect x="35"  y="-30" width="10" height="60" fill={getSVGColor(band4)}/>
         </g>
+        
+        {/* Brillo del cuerpo */}
         <path d="M -45,-12 Q 0,-18 45,-12"
           fill="none" stroke="#fff" strokeWidth="5" opacity="0.25" strokeLinecap="round"/>
-        <text x="0" y={pinDrop + 16} fontSize="10" fill="#777"
+        
+        {/* Texto descriptivo centrado */}
+        <text x="0" y="40" fontSize="12" fill="#777"
           fontFamily="monospace" textAnchor="middle"
           transform={`rotate(${-rotate})`}>{band1}-{band2}-{band3}</text>
       </g>
 
-      <circle cx={pinA.x} cy={pinA.y} r="4" fill="transparent" data-pin="a"/>
-      <circle cx={pinB.x} cy={pinB.y} r="4" fill="transparent" data-pin="b"/>
+      {/* Hitboxes invisibles en los extremos exactos de las patas */}
+      <circle cx={pinA.x} cy={pinA.y} r="5" fill="transparent" data-pin="a"/>
+      <circle cx={pinB.x} cy={pinB.y} r="5" fill="transparent" data-pin="b"/>
     </g>
   )
 }

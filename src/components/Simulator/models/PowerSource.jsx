@@ -10,9 +10,8 @@ export const PowerSource = ({
   const id = `power-${x}-${y}`
 
   // Puntos de conexión absolutos para el sistema de cables
-  const pinA = { x: x + 469 * scale, y: y + 68 * scale  }  // punta cable rojo (+)
-  const pinB = { x: x + 479 * scale, y: y + 220 * scale }  // punta cable negro (-)
-
+const pinA = { x: x + 575 * scale, y: y + 68 * scale };  // Punta cable rojo
+const pinB = { x: x + 585 * scale, y: y + 220 * scale }; // Punta cable negro
   return (
     <g data-node-a={nodeA} data-node-b={nodeB}>
       <defs>

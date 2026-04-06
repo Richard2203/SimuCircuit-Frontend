@@ -532,3 +532,10 @@ body {
   .hero-logo      { font-size: 26px; }
   .hero           { padding: var(--sp-8) 0 var(--sp-6); }
 }
+
+/* ── Card meta (topic · unit) ─────────────────────────────── */
+.card-meta {
+  font-size: 11px;
+  color: var(--text-hint);
+  margin-bottom: var(--sp-3);
+}
