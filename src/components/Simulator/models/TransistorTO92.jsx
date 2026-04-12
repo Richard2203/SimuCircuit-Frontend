@@ -1,14 +1,24 @@
 // TransistorTO92.jsx
-import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js'
+import { useState } from 'react';
+import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js';
+import { ComponentValueLabel } from './ComponentValueLabel.jsx';
+import { useComponentValue } from '../../../hooks/useComponentValue.js';
 
 export const TransistorTO92 = ({
   nodeE = 'emisor1', nodeB = 'base1', nodeC = 'colector1',
   x = 0, y = 0,
   orientation = 'vertical',
   scale = COMPONENT_SCALE.transistorTO92,
+  // Value props
+  componentId,
+  initialValue = 100, // Beta (hFE)
+  onValueChange,
 }) => {
-  const id = `transistor-${x}-${y}`
-  const rotate = orientation === 'horizontal' ? -90 : 0
+  const id = componentId || `transistorTO92-${x}-${y}`;
+  const [value, setValue] = useComponentValue(id, initialValue);
+  const [hovered, setHovered] = useState(false);
+
+  const rotate = orientation === 'horizontal' ? -90 : 0;
 
   const pins = orientation === 'vertical'
     ? {
@@ -20,10 +30,21 @@ export const TransistorTO92 = ({
         e: { x: x - 60 * scale, y: y - 15 * scale },
         b: { x: x - 60 * scale, y: y },
         c: { x: x - 60 * scale, y: y + 15 * scale },
-      }
+      };
+
+  const handleValueChange = (newVal) => {
+    setValue(newVal);
+    onValueChange?.(newVal);
+  };
 
   return (
-    <g data-node-e={nodeE} data-node-b={nodeB} data-node-c={nodeC}>
+    <g
+      data-node-e={nodeE}
+      data-node-b={nodeB}
+      data-node-c={nodeC}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <defs>
         <linearGradient id={`${id}-pin-grad`} x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%"   stopColor="#ddd"/>
@@ -36,7 +57,14 @@ export const TransistorTO92 = ({
           <stop offset="100%" stopColor="#111"/>
         </linearGradient>
       </defs>
+
       <g transform={`translate(${x}, ${y}) rotate(${rotate}) scale(${scale})`}>
+        {hovered && (
+          <rect x="-35" y="-20" width="70" height="85" rx="6"
+            fill="none" stroke="rgba(97,218,251,0.3)" strokeWidth="4"
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
         <g stroke="#9f9f9f" strokeWidth="6" strokeLinecap="round">
           <line x1="-15" y1="12" x2="-15" y2="60"/>
           <line x1="0"   y1="12" x2="0"   y2="60"/>
@@ -53,10 +81,25 @@ export const TransistorTO92 = ({
           <line x1="-10" y1="0"  x2="10" y2="0"/>
           <line x1="-10" y1="10" x2="10" y2="10"/>
         </g>
+
+        {/* β value label */}
+        <ComponentValueLabel
+          componentId={id}
+          type="bjt"
+          value={value}
+          onChange={handleValueChange}
+          x={38}
+          y={0}
+          textAnchor="start"
+          fontSize={11}
+          fill="#aaa"
+          rotate={-rotate}
+        />
       </g>
+
       <circle cx={pins.e.x} cy={pins.e.y} r="5" fill="transparent" data-pin="e"/>
       <circle cx={pins.b.x} cy={pins.b.y} r="5" fill="transparent" data-pin="b"/>
       <circle cx={pins.c.x} cy={pins.c.y} r="5" fill="transparent" data-pin="c"/>
     </g>
-  )
-}
+  );
+};

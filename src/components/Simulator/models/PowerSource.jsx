@@ -1,4 +1,9 @@
-import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js'
+// PowerSource.jsx
+import { useState } from 'react';
+import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js';
+import { ComponentValueLabel } from './ComponentValueLabel.jsx';
+import { useComponentValue } from '../../../hooks/useComponentValue.js';
+
 export const PowerSource = ({
   nodeA = 'vcc',
   nodeB = 'gnd',
@@ -6,14 +11,33 @@ export const PowerSource = ({
   x = 0,
   y = 0,
   scale = COMPONENT_SCALE.powerSource,
+  // Value props
+  componentId,
+  initialValue = 12,   // 12V default in SI (Volts)
+  onValueChange,
 }) => {
-  const id = `power-${x}-${y}`
+  const id = componentId || `power-${x}-${y}`;
+  const [value, setValue] = useComponentValue(id, initialValue);
+  const [hovered, setHovered] = useState(false);
 
-  // Puntos de conexión absolutos para el sistema de cables
-const pinA = { x: x + 575 * scale, y: y + 68 * scale };  // Punta cable rojo
-const pinB = { x: x + 585 * scale, y: y + 220 * scale }; // Punta cable negro
+  const pinA = { x: x + 575 * scale, y: y + 68 * scale };
+  const pinB = { x: x + 585 * scale, y: y + 220 * scale };
+
+  const handleValueChange = (newVal) => {
+    setValue(newVal);
+    onValueChange?.(newVal);
+  };
+
+  // Build display label from live value — e.g. "12V DC"
+  const displayedLabel = `${value}V DC`;
+
   return (
-    <g data-node-a={nodeA} data-node-b={nodeB}>
+    <g
+      data-node-a={nodeA}
+      data-node-b={nodeB}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <defs>
         <linearGradient id={`${id}-top`} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%"   stopColor="#4a4a4a"/>
@@ -40,11 +64,17 @@ const pinB = { x: x + 585 * scale, y: y + 220 * scale }; // Punta cable negro
       </defs>
 
       <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+        {/* Selection glow */}
+        {hovered && (
+          <rect x="100" y="35" width="408" height="200" rx="6"
+            fill="none" stroke="rgba(97,218,251,0.35)" strokeWidth="8"
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
 
         {/* Cara lateral derecha */}
         <path d="M 484,55 L 500,43 L 500,228 L 484,218 Z"
           fill={`url(#${id}-side)`} stroke="#000" strokeWidth="1"/>
-        {/* Cara superior lateral */}
         <path d="M 484,55 L 500,43 L 500,55 L 484,67 Z"
           fill="#383838" stroke="#000" strokeWidth="0.8"/>
         {/* Cara frontal */}
@@ -54,25 +84,23 @@ const pinB = { x: x + 585 * scale, y: y + 220 * scale }; // Punta cable negro
         <path d="M 106,43 L 484,43 L 484,67 L 106,67 Z"
           fill={`url(#${id}-top)`} stroke="#000" strokeWidth="1"/>
 
-        {/* Borde superior */}
+        {/* Bordes */}
         <rect x="106" y="38" width="378" height="8" rx="3"
           fill="#111" stroke="#000" strokeWidth="0.5"/>
         <path d="M 484,38 L 500,28 L 500,43 L 484,46 Z"
           fill="#0d0d0d" stroke="#000" strokeWidth="0.5"/>
-
-        {/* Borde inferior — igual al superior */}
         <rect x="106" y="218" width="378" height="8" rx="3"
           fill="#111" stroke="#000" strokeWidth="0.5"/>
         <path d="M 484,218 L 500,208 L 500,226 L 484,226 Z"
           fill="#0d0d0d" stroke="#000" strokeWidth="0.5"/>
 
-        {/* Texto */}
+        {/* Texto estático del label (sombra) */}
         <text x="295" y="152" fontSize="30" fontWeight="bold"
           fontFamily="Arial, sans-serif" fill="#000"
-          textAnchor="middle" opacity="0.5">{label}</text>
+          textAnchor="middle" opacity="0.5">{displayedLabel}</text>
         <text x="295" y="150" fontSize="30" fontWeight="bold"
           fontFamily="Arial, sans-serif" fill={`url(#${id}-text)`}
-          textAnchor="middle" letterSpacing="1">{label}</text>
+          textAnchor="middle" letterSpacing="1">{displayedLabel}</text>
 
         {/* Tornillos */}
         {[
@@ -93,7 +121,7 @@ const pinB = { x: x + 585 * scale, y: y + 220 * scale }; // Punta cable negro
         <path d="M 480,122 L 488,128 L 480,134 Z" fill="#555"/>
         <path d="M 480,152 L 488,158 L 480,164 Z" fill="#555"/>
 
-        {/* Cable rojo (VCC) — forma L */}
+        {/* Cable rojo (VCC) */}
         <path d="M 500,128 L 575,128 L 575,80"
           fill="none" stroke="#333" strokeWidth="9"
           strokeLinecap="round" strokeLinejoin="round"/>
@@ -105,7 +133,7 @@ const pinB = { x: x + 585 * scale, y: y + 220 * scale }; // Punta cable negro
         <circle cx="575" cy="68" r="3.5"
           fill="#d4943a" stroke="#996620" strokeWidth="0.8"/>
 
-        {/* Cable negro (GND) — forma L */}
+        {/* Cable negro (GND) */}
         <path d="M 500,158 L 585,158 L 585,208"
           fill="none" stroke="#333" strokeWidth="9"
           strokeLinecap="round" strokeLinejoin="round"/>
@@ -117,11 +145,23 @@ const pinB = { x: x + 585 * scale, y: y + 220 * scale }; // Punta cable negro
         <circle cx="585" cy="220" r="3.5"
           fill="#d4943a" stroke="#996620" strokeWidth="0.8"/>
 
+        {/* Value label — editable, below the body */}
+        <ComponentValueLabel
+          componentId={id}
+          type="voltageSource"
+          value={value}
+          onChange={handleValueChange}
+          x={295}
+          y={245}
+          textAnchor="middle"
+          fontSize={14}
+          fill="#61dafb"
+          rotate={0}
+        />
       </g>
 
-      {/* Puntos de conexión invisibles para el sistema de cables */}
       <circle cx={pinA.x} cy={pinA.y} r="4" fill="transparent" data-pin="a"/>
       <circle cx={pinB.x} cy={pinB.y} r="4" fill="transparent" data-pin="b"/>
     </g>
-  )
-}
+  );
+};

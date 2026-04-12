@@ -32,11 +32,30 @@ const CircuitoUnaMalla = ({ preview = false }) => {
       viewBox={`0 0 ${W} ${H}`}
       style={{ background: '#f5f5f5', borderRadius: 8 }}
     >
-      <PowerSource x={pwrX} y={pwrY} scale={S_PWR} label="12V DC" />
+      <PowerSource
+        x={pwrX} y={pwrY} scale={S_PWR}
+        componentId="uma-pwr1"
+        initialValue={12}
+      />
 
-      <Resistor x={r1X} y={commonY} scale={S_RES} band1="brown" band2="black" band3="red" />
-      <Resistor x={r2X} y={commonY} scale={S_RES} band1="red"   band2="red"   band3="red" />
-      <Resistor x={r3X} y={commonY} scale={S_RES} band1="orange" band2="orange" band3="red" />
+      <Resistor
+        x={r1X} y={commonY} scale={S_RES}
+        componentId="uma-r1"
+        initialValue={1000}
+        band1="brown" band2="black" band3="red"
+      />
+      <Resistor
+        x={r2X} y={commonY} scale={S_RES}
+        componentId="uma-r2"
+        initialValue={2200}
+        band1="red" band2="red" band3="red"
+      />
+      <Resistor
+        x={r3X} y={commonY} scale={S_RES}
+        componentId="uma-r3"
+        initialValue={3300}
+        band1="orange" band2="orange" band3="red"
+      />
 
       <line x1={bridge1.start} y1={commonY} x2={bridge1.end} y2={commonY}
         stroke="#777" strokeWidth={preview ? 2 : 4} strokeLinecap="round" />

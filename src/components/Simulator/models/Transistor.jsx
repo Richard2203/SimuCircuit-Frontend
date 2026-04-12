@@ -1,13 +1,24 @@
 // Transistor.jsx
-import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js'
+import { useState } from 'react';
+import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js';
+import { ComponentValueLabel } from './ComponentValueLabel.jsx';
+import { useComponentValue } from '../../../hooks/useComponentValue.js';
 
 export const Transistor = ({
   nodeIn = 'in', nodeAdj = 'adj', nodeOut = 'out',
   x = 0, y = 0,
   orientation = 'vertical',
   scale = COMPONENT_SCALE.transistor,
+  // Value props
+  componentId,
+  initialValue = 100, // Beta (hFE) — dimensionless
+  onValueChange,
 }) => {
-  const rotate = orientation === 'horizontal' ? -90 : 0
+  const id = componentId || `transistor-${x}-${y}`;
+  const [value, setValue] = useComponentValue(id, initialValue);
+  const [hovered, setHovered] = useState(false);
+
+  const rotate = orientation === 'horizontal' ? -90 : 0;
 
   const pins = orientation === 'vertical'
     ? {
@@ -19,11 +30,28 @@ export const Transistor = ({
         adj: { x: x - 60 * scale, y: y - 15 * scale },
         out: { x: x - 60 * scale, y: y },
         in:  { x: x - 60 * scale, y: y + 15 * scale },
-      }
+      };
+
+  const handleValueChange = (newVal) => {
+    setValue(newVal);
+    onValueChange?.(newVal);
+  };
 
   return (
-    <g data-node-in={nodeIn} data-node-adj={nodeAdj} data-node-out={nodeOut}>
+    <g
+      data-node-in={nodeIn}
+      data-node-adj={nodeAdj}
+      data-node-out={nodeOut}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <g transform={`translate(${x}, ${y}) rotate(${rotate}) scale(${scale})`}>
+        {hovered && (
+          <rect x="-35" y="-62" width="70" height="80" rx="6"
+            fill="none" stroke="rgba(97,218,251,0.3)" strokeWidth="4"
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
         <path d="M -25,-10 L 25,-10 L 25,-45 L 15,-55 L -15,-55 L -25,-45 Z" fill="#b3b3b3"/>
         <circle cx="0" cy="-35" r="7" fill="#666"/>
         <circle cx="0" cy="-35" r="5" fill="#f4f4f4" opacity="0.3"/>
@@ -38,10 +66,25 @@ export const Transistor = ({
           <line x1="-10" y1="0" x2="10" y2="0"/>
           <line x1="-15" y1="8" x2="15" y2="8"/>
         </g>
+
+        {/* β value label */}
+        <ComponentValueLabel
+          componentId={id}
+          type="bjt"
+          value={value}
+          onChange={handleValueChange}
+          x={38}
+          y={-5}
+          textAnchor="start"
+          fontSize={11}
+          fill="#aaa"
+          rotate={-rotate}
+        />
       </g>
+
       <circle cx={pins.adj.x} cy={pins.adj.y} r="5" fill="transparent" data-pin="adj"/>
       <circle cx={pins.out.x} cy={pins.out.y} r="5" fill="transparent" data-pin="out"/>
       <circle cx={pins.in.x}  cy={pins.in.y}  r="5" fill="transparent" data-pin="in"/>
     </g>
-  )
-}
+  );
+};
