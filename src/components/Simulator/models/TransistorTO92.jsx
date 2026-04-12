@@ -91,7 +91,7 @@ export const TransistorTO92 = ({
           x={38}
           y={0}
           textAnchor="start"
-          fontSize={11}
+          fontSize={14/scale}
           fill="#aaa"
           rotate={-rotate}
         />

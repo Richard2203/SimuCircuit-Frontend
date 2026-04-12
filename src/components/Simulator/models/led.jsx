@@ -67,7 +67,7 @@ export const LED = ({
           x={38}
           y={10}
           textAnchor="start"
-          fontSize={11}
+          fontSize={14/scale}
           fill="#777"
           rotate={-rotate}
         />

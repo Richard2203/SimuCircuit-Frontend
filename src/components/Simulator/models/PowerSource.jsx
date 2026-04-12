@@ -154,7 +154,7 @@ export const PowerSource = ({
           x={295}
           y={245}
           textAnchor="middle"
-          fontSize={14}
+          fontSize={14/scale}
           fill="#61dafb"
           rotate={0}
         />

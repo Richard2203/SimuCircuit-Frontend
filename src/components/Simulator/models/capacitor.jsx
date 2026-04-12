@@ -145,13 +145,13 @@ export const Capacitor = ({
           x={labelX}
           y={labelY}
           textAnchor="start"
-          fontSize={11}
+          fontSize={14/scale}
           fill="#777"
           rotate={labelRotate}
         />
 
         {/* Voltage rating (static) */}
-        <text x={66} y={6} fontSize={10} fill="#555" fontFamily="monospace"
+        <text x={66} y={6} fontSize={14/scale} fill="#555" fontFamily="monospace"
           transform={`rotate(${-rotate})`}>{voltage}</text>
       </g>
 

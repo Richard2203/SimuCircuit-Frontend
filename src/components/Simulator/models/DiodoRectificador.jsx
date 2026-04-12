@@ -63,7 +63,7 @@ export const DiodoRectificador = ({
           x={0}
           y={38}
           textAnchor="middle"
-          fontSize={11}
+          fontSize={14/scale}
           fill="#aaa"
           rotate={-rotate}
         />

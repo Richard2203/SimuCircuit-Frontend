@@ -1,17 +1,3 @@
-/**
- * ComponentValueLabel — Shared inline-edit label for circuit components.
- *
- * Renders a clickable value label in SVG. On click it mounts an HTML
- * <foreignObject> text input for inline editing with:
- *  - Notation parsing (10k, 4.7u, 1e-6, etc.)
- *  - Real-time validation with green/red feedback
- *  - Tooltip on error showing allowed range
- *  - Enter / blur to confirm, Escape to cancel
- *
- * Pattern: Observer — publishes COMPONENT_VALUE_CHANGED to eventBus.
- *          Mediator  — parent circuits subscribe and update their state.
- */
-
 import { useState, useRef, useEffect, useCallback } from 'react';
 import eventBus from '../../../core/EventBus';
 

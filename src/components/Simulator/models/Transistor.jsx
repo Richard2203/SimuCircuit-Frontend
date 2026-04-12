@@ -76,7 +76,7 @@ export const Transistor = ({
           x={38}
           y={-5}
           textAnchor="start"
-          fontSize={11}
+          fontSize={14/scale}
           fill="#aaa"
           rotate={-rotate}
         />

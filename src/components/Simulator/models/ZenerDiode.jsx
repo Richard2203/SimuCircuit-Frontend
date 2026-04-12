@@ -85,7 +85,7 @@ export const ZenerDiode = ({
           x={0}
           y={36}
           textAnchor="middle"
-          fontSize={11}
+          fontSize={14/scale}
           fill="#aaa"
           rotate={-rotate}
         />

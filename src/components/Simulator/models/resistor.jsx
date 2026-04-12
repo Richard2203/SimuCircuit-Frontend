@@ -128,7 +128,7 @@ export const Resistor = ({
           x={labelX}
           y={labelY}
           textAnchor="middle"
-          fontSize={12}
+          fontSize={14/scale}
           fill="#aaa"
           rotate={labelRotate}
         />
