@@ -9,9 +9,15 @@ export function FilterPanel({ filters, dispatch }) {
 
   const availableTopics = local.unit ? TOPICS_BY_UNIT[local.unit] || [] : [];
 
-  const handleField = (key, value) =>
-    setLocal((prev) => ({ ...prev, [key]: value, ...(key === 'unit' ? { topic: '' } : {}) }));
+  const handleField = (key, value) => {
+    const updated = { ...local, [key]: value, ...(key === 'unit' ? { topic: '' } : {}) };
+    setLocal(updated);
+    if (key === 'search') {
+      dispatch('SET_FILTER', { ...updated, components: localComps });
+    }
+};
 
+  
   const handleComponent = (comp) =>
     setLocalComps((prev) =>
       prev.includes(comp) ? prev.filter((c) => c !== comp) : [...prev, comp]

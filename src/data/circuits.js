@@ -1,10 +1,8 @@
 export const DIFFICULTIES = ['Fácil', 'Intermedio', 'Difícil'];
-export const UNITS        = ['Unidad 1', 'Unidad 2', 'Unidad 3', 'Unidad 4'];
+export const UNITS        = ['Circuitos Eléctricos', 'Electrónica Analógica'];
 export const TOPICS_BY_UNIT = {
-  'Unidad 1': ['Mallas DC', 'Nodal DC'],
-  'Unidad 2': ['Transitorio RC', 'Transitorio RL'],
-  'Unidad 3': ['Amplificadores', 'Diodos'],
-  'Unidad 4': ['Potencia', 'Filtros'],
+  'Circuitos Eléctricos': ['Mallas DC', 'Ley de Ohm', 'Fuentes de Voltaje Independientes', 'Fuentes de Corriente Independientes', 'Ley de Kirchhoff de Corriente', 'Ley de Kirchhoff de Voltaje', 'Divisor de Voltaje', 'Divisor de Corriente', 'Análisis de Mallas', 'Análisis de Nodos', 'Teorema de Thevenin', 'Teorema de Norton', 'Teorema de Superposición', 'Teorema de Intercambio de Fuentes', 'Theorema de Thévenin', 'Teorema de Norton', 'Teorema de Máxima Transferencia de Potencia'],
+  'Electrónica Analógica': ['Teoria de Semiconductores', 'Transistores BJT', 'Transistores FET', 'Transitores BJT'],
 };
 export const CIRCUIT_TYPES  = ['Serie', 'Paralelo', 'Mixto', 'Mallas', 'Nodal'];
 export const COMPONENTS_LIST = [
@@ -20,22 +18,22 @@ export const ALL_CIRCUITS = [
     id:         'cuatro-mallas',
     name:       'Circuito de Cuatro Mallas',
     difficulty: 'Intermedio',
-    unit:       'Unidad 1',
+    unit:       'Circuitos Eléctricos',
     topic:      'Mallas DC',
     type:       'Mallas',
     components: ['Resistencias'],
-    voltage: 22, current: 0.5, resistance: 44,
-    R: 24, C: 0, L: 0, F: 1, M: 4,
+    voltage: 22, current: 0.5, resistance: 9,
+    R: 9, C: 0, L: 0, F: 2, M: 4,
   },
   {
     id:         'una-malla',
     name:       'Circuito de Una Malla',
     difficulty: 'Fácil',
-    unit:       'Unidad 1',
+    unit:       'Circuitos Eléctricos',
     topic:      'Mallas DC',
     type:       'Serie',
     components: ['Resistencias'],
-    voltage: 12, current: 0.3, resistance: 40,
-    R: 30, C: 0, L: 0, F: 1, M: 1,
+    voltage: 12, current: 0.3, resistance: 4,
+    R: 3, C: 0, L: 0, F: 1, M: 1,
   },
 ]
