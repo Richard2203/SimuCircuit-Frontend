@@ -42,19 +42,16 @@ const CircuitoUnaMalla = ({ preview = false }) => {
         x={r1X} y={commonY} scale={S_RES}
         componentId="uma-r1"
         initialValue={1000}
-        band1="brown" band2="black" band3="red"
       />
       <Resistor
         x={r2X} y={commonY} scale={S_RES}
         componentId="uma-r2"
         initialValue={2200}
-        band1="red" band2="red" band3="red"
       />
       <Resistor
         x={r3X} y={commonY} scale={S_RES}
         componentId="uma-r3"
         initialValue={3300}
-        band1="orange" band2="orange" band3="red"
       />
 
       <line x1={bridge1.start} y1={commonY} x2={bridge1.end} y2={commonY}

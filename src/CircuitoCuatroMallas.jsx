@@ -75,51 +75,43 @@ const CircuitoCuatroMallas = ({ preview = false }) => {
       <Cable x1={(NX[0]+NX[1])/2 + arm} y1={NY[0]} x2={NX[1]} y2={NY[0]} />
 
       <Resistor x={(NX[1]+NX[2])/2} y={NY[0]} scale={S}
-        componentId="4m-rh2" initialValue={10000}
-        band1="orange" />
+        componentId="4m-rh2" initialValue={10000} />
       <Cable x1={NX[1]} y1={NY[0]} x2={(NX[1]+NX[2])/2 - arm} y2={NY[0]} />
       <Cable x1={(NX[1]+NX[2])/2 + arm} y1={NY[0]} x2={NX[2]} y2={NY[0]} />
 
       <Resistor x={(NX[0]+NX[1])/2} y={NY[1]} scale={S}
-        componentId="4m-rh3" initialValue={10000}
-        band1="brown" />
+        componentId="4m-rh3" initialValue={10000} />
       <Cable x1={NX[0]} y1={NY[1]} x2={(NX[0]+NX[1])/2 - arm} y2={NY[1]} />
       <Cable x1={(NX[0]+NX[1])/2 + arm} y1={NY[1]} x2={NX[1]} y2={NY[1]} />
 
       <Resistor x={(NX[1]+NX[2])/2} y={NY[1]} scale={S}
-        componentId="4m-rh4" initialValue={10000}
-        band1="red" />
+        componentId="4m-rh4" initialValue={10000} />
       <Cable x1={NX[1]} y1={NY[1]} x2={(NX[1]+NX[2])/2 - arm} y2={NY[1]} />
       <Cable x1={(NX[1]+NX[2])/2 + arm} y1={NY[1]} x2={NX[2]} y2={NY[1]} />
 
       <Resistor x={(NX[0]+NX[1])/2} y={NY[2]} scale={S}
-        componentId="4m-rh5" initialValue={10000}
-        band1="green" />
+        componentId="4m-rh5" initialValue={10000}/>
       <Cable x1={NX[0]} y1={NY[2]} x2={(NX[0]+NX[1])/2 - arm} y2={NY[2]} />
       <Cable x1={(NX[0]+NX[1])/2 + arm} y1={NY[2]} x2={NX[1]} y2={NY[2]} />
 
       <Resistor x={(NX[1]+NX[2])/2} y={NY[2]} scale={S}
-        componentId="4m-rh6" initialValue={10000}
-        band1="green" />
+        componentId="4m-rh6" initialValue={10000} />
       <Cable x1={NX[1]} y1={NY[2]} x2={(NX[1]+NX[2])/2 - arm} y2={NY[2]} />
       <Cable x1={(NX[1]+NX[2])/2 + arm} y1={NY[2]} x2={NX[2]} y2={NY[2]} />
 
       {/* Resistencias verticales */}
       <Resistor x={NX[1]} y={(NY[0]+NY[1])/2} scale={S} orientation="vertical"
-        componentId="4m-rv1" initialValue={10000}
-        band1="brown" />
+        componentId="4m-rv1" initialValue={10000}/>
       <Cable x1={NX[1]} y1={NY[0]} x2={NX[1]} y2={(NY[0]+NY[1])/2 - arm} />
       <Cable x1={NX[1]} y1={(NY[0]+NY[1])/2 + arm} x2={NX[1]} y2={NY[1]} />
 
       <Resistor x={NX[2]} y={(NY[0]+NY[1])/2} scale={S} orientation="vertical"
-        componentId="4m-rv2" initialValue={10000}
-        band1="brown" />
+        componentId="4m-rv2" initialValue={10000}/>
       <Cable x1={NX[2]} y1={NY[0]} x2={NX[2]} y2={(NY[0]+NY[1])/2 - arm} />
       <Cable x1={NX[2]} y1={(NY[0]+NY[1])/2 + arm} x2={NX[2]} y2={NY[1]} />
 
       <Resistor x={NX[2]} y={(NY[1]+NY[2])/2} scale={S} orientation="vertical"
-        componentId="4m-rv3" initialValue={10000}
-        band1="red" />
+        componentId="4m-rv3" initialValue={10000} />
       <Cable x1={NX[2]} y1={NY[1]} x2={NX[2]} y2={(NY[1]+NY[2])/2 - arm} />
       <Cable x1={NX[2]} y1={(NY[1]+NY[2])/2 + arm} x2={NX[2]} y2={NY[2]} />
 

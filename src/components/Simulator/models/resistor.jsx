@@ -13,12 +13,36 @@ const colorCodeMap = {
   gold:   { color: '#CFB53B' }, silver: { color: '#C0C0C0' },
 };
 
+
+const BAND_COLORS = [
+  'black', 'brown', 'red', 'orange', 'yellow',
+  'green', 'blue',  'violet', 'grey',  'white'
+]
+
+function ohmsToBands(ohms) {
+  if (!ohms || ohms <= 0) return ['black', 'black', 'black', 'gold']
+
+  // Normalizar a dos dígitos significativos
+  const exp   = Math.floor(Math.log10(ohms)) - 1
+  const base  = Math.round(ohms / Math.pow(10, exp))
+
+  const digit1     = Math.floor(base / 10) % 10
+  const digit2     = base % 10
+  const multiplier = exp  // potencia de 10
+
+  return [
+    BAND_COLORS[digit1],
+    BAND_COLORS[digit2],
+    multiplier >= 0 ? BAND_COLORS[multiplier] : 'silver',
+    'gold'   // tolerancia fija ±5%
+  ]
+}
+
 const getSVGColor = (c) => colorCodeMap[c?.toLowerCase()]?.color || c || 'transparent';
 
 export const Resistor = ({
   nodeA = 'node1',
   nodeB = 'node2',
-  band1 = 'red', band2 = 'red', band3 = 'brown', band4 = 'gold',
   bodyColor = '#e1c18e',
   x = 0, y = 0,
   orientation = 'horizontal',
@@ -31,6 +55,8 @@ export const Resistor = ({
   const id = componentId || `resistor-${x}-${y}`;
   const [value, setValue] = useComponentValue(id, initialValue);
   const [hovered, setHovered] = useState(false);
+  const [b1, b2, b3, b4] = ohmsToBands(value)
+
 
   const rotate = orientation === 'vertical' ? 90 : 0;
   const armLength = 100;
@@ -109,10 +135,10 @@ export const Resistor = ({
 
         {/* Bandas de color */}
         <g clipPath={`url(#${id}-clip)`}>
-          <rect x="-52" y="-30" width="10" height="60" fill={getSVGColor(band1)}/>
-          <rect x="-35" y="-30" width="8"  height="60" fill={getSVGColor(band2)}/>
-          <rect x="-15" y="-30" width="8"  height="60" fill={getSVGColor(band3)}/>
-          <rect x="35"  y="-30" width="10" height="60" fill={getSVGColor(band4)}/>
+          <rect x="-52" y="-30" width="10" height="60" fill={getSVGColor(b1)}/>
+          <rect x="-35" y="-30" width="8"  height="60" fill={getSVGColor(b2)}/>
+          <rect x="-15" y="-30" width="8"  height="60" fill={getSVGColor(b3)}/>
+          <rect x="35"  y="-30" width="10" height="60" fill={getSVGColor(b4)}/>
         </g>
 
         {/* Brillo */}
