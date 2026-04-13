@@ -42,3 +42,6 @@ class EventBus {
 // Singleton compartido por toda la app
 const eventBus = new EventBus();
 export default eventBus;
+
+// exportancion para instancias aisladas
+export { EventBus };

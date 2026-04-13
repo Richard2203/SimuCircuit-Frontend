@@ -139,3 +139,7 @@ class SimuCircuitMediator {
 // Singleton compartido
 const mediator = new SimuCircuitMediator(eventBus);
 export default mediator;
+
+
+// exportancia para pruebas unitarias y de integracion
+export { SimuCircuitMediator };
