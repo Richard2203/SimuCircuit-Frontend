@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ALL_CIRCUITS } from '../../data/circuits';
 import { FilterPanel } from '../FilterPanel';
 import { CircuitCard } from '../CircuitCard';
@@ -12,7 +13,8 @@ const MAX_VISIBLE = 32;
  */
 function applyFilters(circuits, filters) {
   return circuits.filter((c) => {
-    if (filters.search && !c.name.toLowerCase().includes(filters.search.toLowerCase()))
+    const name = c.name ?? c.nombre_circuito ?? c.nombre ?? '';
+    if (filters.search && !name.toLowerCase().includes(filters.search.toLowerCase()))
       return false;
     if (filters.difficulty && c.difficulty !== filters.difficulty)
       return false;
@@ -24,7 +26,7 @@ function applyFilters(circuits, filters) {
       return false;
     if (
       filters.components.length > 0 &&
-      !filters.components.every((comp) => c.components.includes(comp))
+      !filters.components.every((comp) => (c.components ?? []).includes(comp))
     )
       return false;
     return true;
@@ -34,12 +36,24 @@ function applyFilters(circuits, filters) {
 /**
  * Library — Vista principal de la biblioteca de circuitos.
  * Orquesta FilterPanel y la grilla de CircuitCards.
+ * Se conecta a la API a través del Mediator (api.cargarFiltros, api.buscarCircuitos).
  *
- * @param {{ state: object, dispatch: Function }} props
+ * @param {{ state: object, dispatch: Function, api: object }} props
  */
-export function Library({ state, dispatch }) {
-  const filtered = applyFilters(ALL_CIRCUITS, state.filters);
-  const visible = filtered.slice(0, MAX_VISIBLE);
+export function Library({ state, dispatch, api }) {
+  const { filters, filtrosApi, circuitosApi, loading } = state;
+
+  // Al montar: cargar filtros desde la API
+  useEffect(() => {
+    api.cargarFiltros();
+  }, [api]);
+
+  // Fuente de datos: preferir circuitos de la API; caer a dataset local si no hay
+  const dataset = circuitosApi.length > 0 ? circuitosApi : ALL_CIRCUITS;
+  const filtered = applyFilters(dataset, filters);
+  const visible  = filtered.slice(0, MAX_VISIBLE);
+
+  const isLoadingCircuitos = loading?.circuitos;
 
   return (
     <div className="page-container">
@@ -59,24 +73,40 @@ export function Library({ state, dispatch }) {
           <p className="section-sub">Selecciona un circuito para comenzar la simulación</p>
         </div>
 
-        <FilterPanel filters={state.filters} dispatch={dispatch} />
+        <FilterPanel
+          filters={filters}
+          filtrosApi={filtrosApi}
+          dispatch={dispatch}
+          onBuscar={(params) => api.buscarCircuitos(params)}
+        />
 
-        <p className="results-count">
-          Mostrando {visible.length} de {filtered.length} circuitos
-          {filtered.length !== ALL_CIRCUITS.length && ` (${ALL_CIRCUITS.length} total)`}
-        </p>
+        {isLoadingCircuitos ? (
+          <p className="results-count">Buscando circuitos…</p>
+        ) : (
+          <p className="results-count">
+            Mostrando {visible.length} de {filtered.length} circuitos
+            {filtered.length !== dataset.length && ` (${dataset.length} total)`}
+          </p>
+        )}
 
         <div className="circuit-grid">
           {visible.map((circuit) => (
             <CircuitCard
               key={circuit.id}
               circuit={circuit}
-              onSelect={(c) => dispatch('SELECT_CIRCUIT', c)}
+              onSelect={(c) => {
+                // Si el circuito viene de la API, cargamos su netlist completa
+                if (c.id && typeof c.id === 'number') {
+                  api.cargarCircuito(c.id);
+                } else {
+                  dispatch('SELECT_CIRCUIT', c);
+                }
+              }}
             />
           ))}
         </div>
 
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !isLoadingCircuitos && (
           <div className="empty-state">
             <p>No se encontraron circuitos con los filtros actuales.</p>
             <button className="control-btn" onClick={() => dispatch('CLEAR_FILTERS')}>

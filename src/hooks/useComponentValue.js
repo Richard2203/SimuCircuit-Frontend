@@ -1,25 +1,27 @@
 /**
  * useComponentValue — Observer hook
  *
- * Manages the local state of a circuit component's numeric value.
- * Subscribes to COMPONENT_VALUE_CHANGED on the EventBus so external
- * changes (e.g. from a sidebar or other panel) are reflected here.
+ * Gestiona el valor numérico local de un componente del canvas SVG.
+ * Se suscribe a COMPONENT_VALUE_CHANGED en el EventBus para que cambios
+ * externos (ej. sidebar, otro panel) se reflejen aquí (Observer).
  *
- * Returns [value, setValue] in SI units.
+ * Al confirmar un nuevo valor, además de publicar COMPONENT_VALUE_CHANGED,
+ * despacha SET_NETLIST al Mediator para mantener la netlist del estado
+ * global sincronizada con lo que el usuario ve en el canvas.
+ *
+ * @param {string} componentId  - ID único del componente (ej. "R1")
+ * @param {number} initialValue - Valor inicial en unidades SI
+ * @returns {[number, (v: number) => void]}
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import eventBus from '../core/EventBus';
+import mediator  from '../core/Mediator';
 
-/**
- * @param {string} componentId - unique id for this component
- * @param {number} initialValue - initial value in SI units
- * @returns {[number, (v: number) => void]}
- */
 export function useComponentValue(componentId, initialValue) {
   const [value, setValueInternal] = useState(initialValue);
 
-  // Listen for changes from other parts of the app (Observer)
+  // Observer: escuchar cambios externos al valor de este componente
   useEffect(() => {
     const unsub = eventBus.subscribe('COMPONENT_VALUE_CHANGED', ({ id, value: v }) => {
       if (id === componentId) {
@@ -29,9 +31,24 @@ export function useComponentValue(componentId, initialValue) {
     return unsub;
   }, [componentId]);
 
-  const setValue = useCallback((v) => {
-    setValueInternal(v);
-  }, []);
+  /**
+   * Actualiza el valor local y sincroniza la netlist en el Mediator.
+   * Llamado tras confirmar la edición inline en el canvas.
+   */
+  const setValue = useCallback((newVal) => {
+    setValueInternal(newVal);
+
+    // Actualizar la netlist del estado global en el Mediator
+    const { netlist } = mediator.getState();
+    if (Array.isArray(netlist) && netlist.length > 0) {
+      const netlistActualizada = netlist.map((comp) =>
+        comp.id === componentId
+          ? { ...comp, value: String(newVal) }
+          : comp
+      );
+      mediator.dispatch('SET_NETLIST', netlistActualizada);
+    }
+  }, [componentId]);
 
   return [value, setValue];
 }

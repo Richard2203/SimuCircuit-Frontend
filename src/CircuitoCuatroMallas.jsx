@@ -1,6 +1,7 @@
 import React from 'react';
 import { Resistor }    from './components/Simulator/models/resistor.jsx';
 import { PowerSource } from './components/Simulator/models/PowerSource.jsx';
+import { Potentiometer } from './components/Simulator/models/Potentiometer.jsx';
 
 const CircuitoCuatroMallas = ({ preview = false }) => {
   const S    = preview ? 0.22 : 0.45;
@@ -115,6 +116,7 @@ const CircuitoCuatroMallas = ({ preview = false }) => {
       <Cable x1={NX[2]} y1={NY[1]} x2={NX[2]} y2={(NY[1]+NY[2])/2 - arm} />
       <Cable x1={NX[2]} y1={(NY[1]+NY[2])/2 + arm} x2={NX[2]} y2={NY[2]} />
 
+      
       {/* Nodos */}
       {NX.map(x => NY.map(y => (
         <circle key={`${x}-${y}`} cx={x} cy={y} r={preview ? 3 : 5} fill="red" />
