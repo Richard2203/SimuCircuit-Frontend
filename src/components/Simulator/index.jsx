@@ -7,6 +7,36 @@ import { SimulatorSidebar }   from './SimulatorSidebar';
 import { TeoremasPanel }       from './TeoremasPanel';
 
 /**
+ * Normaliza un circuito independientemente de si viene del dataset local
+ * (name, difficulty, R, C…) o de la API (nombre_circuito, dificultad, netlist…).
+ */
+function normalizar(c, netlist) {
+  const name       = c.name ?? c.nombre_circuito ?? c.nombre ?? '—';
+  const difficulty = c.difficulty ?? c.dificultad ?? '';
+  const unit       = c.unit ?? c.materia ?? '';
+  const topic      = c.topic ?? c.unidad_tematica ?? '';
+  const desc       = c.descripcion ?? c.description ?? null;
+
+  // Métricas: preferir campos locales; si son de la API, calcular desde netlist
+  let voltage    = c.voltage    ?? 0;
+  let current    = c.current    ?? 0;
+  let resistance = c.resistance ?? 0;
+
+  // Para circuitos de la API, extraer valor de la primera fuente de voltaje
+  if (!voltage && Array.isArray(netlist) && netlist.length > 0) {
+    const fv = netlist.find((n) => n.type === 'fuente_voltaje');
+    if (fv) voltage = parseFloat(fv.value) || 0;
+    const fc = netlist.find((n) => n.type === 'fuente_corriente');
+    if (fc) current = parseFloat(fc.value) || 0;
+    // R equivalente: primera resistencia como referencia
+    const r = netlist.find((n) => n.type === 'resistencia');
+    if (r) resistance = parseFloat(r.value) || 0;
+  }
+
+  return { name, difficulty, unit, topic, desc, voltage, current, resistance };
+}
+
+/**
  * Simulator — Vista del simulador activo.
  * Recibe state, dispatch y api desde App a través del Mediator.
  * No llama directamente a ningún servicio; todo pasa por api.*.
@@ -30,21 +60,24 @@ export function Simulator({ state, dispatch, api }) {
 
   if (!c) return null;
 
-  const isActive   = simStatus === 'activo';
-  const diffClass  = getDifficultyClass(c.difficulty);
-  const voltage    = c.voltage ?? 0;
-  const current    = c.current ?? 0;
-  const resistance = c.resistance ?? 0;
-  const power      = parseFloat((voltage * current).toFixed(2));
+  // Normalizar campos independientemente del origen (local vs API)
+  const norm = normalizar(c, netlist);
+
+  const isActive    = simStatus === 'activo';
+  const diffClass   = getDifficultyClass(norm.difficulty);
+  const voltage     = norm.voltage;
+  const current     = norm.current;
+  const resistance  = norm.resistance;
+  const power       = parseFloat((voltage * current).toFixed(2));
 
   const isRunningDC = loading?.simulacionDC;
   const isRunningAC = loading?.simulacionAC;
 
   const metrics = [
-    { val: `${voltage}V`,      label: 'Voltaje' },
-    { val: `${current}A`,      label: 'Corriente' },
-    { val: `${resistance}Ω`,   label: 'Resistencia' },
-    { val: `${power}W`,        label: 'Potencia' },
+    { val: voltage    ? `${voltage}V`    : '—', label: 'Voltaje'      },
+    { val: current    ? `${current}A`    : '—', label: 'Corriente'    },
+    { val: resistance ? `${resistance}Ω` : '—', label: 'Resistencia'  },
+    { val: power      ? `${power}W`      : '—', label: 'Potencia'     },
   ];
 
   return (
@@ -68,8 +101,10 @@ export function Simulator({ state, dispatch, api }) {
           <div className="sim-panel p-5">
             <div className="circuit-header">
               <span className="circuit-icon">⚡</span>
-              <span className="circuit-name">{c.name ?? c.nombre_circuito}</span>
-              <span className={`status-pill ${diffClass}`}>{c.difficulty ?? c.dificultad}</span>
+              <span className="circuit-name">{norm.name}</span>
+              {norm.difficulty && (
+                <span className={`status-pill ${diffClass}`}>{norm.difficulty}</span>
+              )}
             </div>
 
             <div className="circuit-svg-wrap">
@@ -152,9 +187,9 @@ export function Simulator({ state, dispatch, api }) {
               <span className="desc-header-text">Descripción</span>
             </div>
             <p className="circuit-desc">
-              {c.descripcion
-                ? c.descripcion
-                : `Circuito ${(c.type ?? '').toLowerCase()} — ${c.topic ?? c.unidad_tematica ?? ''} · ${c.unit ?? c.materia ?? ''}`}
+              {norm.desc
+                ? norm.desc
+                : `Circuito ${(c.type ?? '').toLowerCase()} — ${norm.topic} · ${norm.unit}`}
             </p>
 
             <div className="metric-grid">
@@ -171,27 +206,33 @@ export function Simulator({ state, dispatch, api }) {
               <div
                 style={{
                   margin: '12px 0',
-                  padding: '10px 14px',
-                  background: '#0d2b1a',
-                  border: '1px solid #27ae60',
-                  borderRadius: 6,
+                  padding: '12px 14px',
+                  background: '#0a1f12',
+                  border: '1px solid #16543a',
+                  borderRadius: 8,
                 }}
               >
-                <p style={{ color: '#2ecc71', fontWeight: 600, marginBottom: 6 }}>
-                  Resultado DC
+                <p style={{ color: '#4ade80', fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
+                  ✓ Resultado DC
                 </p>
-                <p style={{ fontSize: 12, color: '#aaa' }}>
-                  Voltajes:{' '}
-                  {Object.entries(simResultadoDC.voltages ?? {})
-                    .map(([n, v]) => `V${n}=${v}V`)
-                    .join('  ')}
-                </p>
-                <p style={{ fontSize: 12, color: '#aaa' }}>
-                  Corrientes:{' '}
-                  {Object.entries(simResultadoDC.currents ?? {})
-                    .map(([id, i]) => `I(${id})=${i}A`)
-                    .join('  ')}
-                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                  {Object.entries(simResultadoDC.voltages ?? {}).map(([nodo, v]) => (
+                    <p key={nodo} style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                      <span style={{ color: '#64748b' }}>V(nodo {nodo})</span>{' '}
+                      <span style={{ color: '#a78bfa', fontFamily: 'monospace', fontWeight: 600 }}>
+                        {Number(v).toFixed(4)} V
+                      </span>
+                    </p>
+                  ))}
+                  {Object.entries(simResultadoDC.currents ?? {}).map(([id, i]) => (
+                    <p key={id} style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                      <span style={{ color: '#64748b' }}>I({id})</span>{' '}
+                      <span style={{ color: '#4ade80', fontFamily: 'monospace', fontWeight: 600 }}>
+                        {Number(i).toFixed(6)} A
+                      </span>
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -302,7 +343,7 @@ export function Simulator({ state, dispatch, api }) {
         </div>
 
         {/* Sidebar */}
-        <SimulatorSidebar circuit={c} simStatus={simStatus} simTime={simTime} />
+        <SimulatorSidebar circuit={c} simStatus={simStatus} simTime={simTime} netlist={netlist} />
       </div>
     </div>
   );

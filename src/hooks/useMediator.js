@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import mediator from '../core/Mediator';
 import eventBus from '../core/EventBus';
 
@@ -35,17 +35,40 @@ export function useMediator() {
   /**
    * Métodos asíncronos que pasan por el Mediator (nunca directamente a los servicios).
    * Los componentes llaman a api.simularDC() en lugar de SimulacionService.simularDC().
+   *
+   * IMPORTANTE: cada función se memoiza con useCallback (dependencias vacías porque
+   * mediator es un singleton estable), y luego el objeto api completo se envuelve
+   * en useMemo. Esto garantiza que la referencia del objeto sea estable entre renders,
+   * evitando que useEffect([api]) se dispare en bucle infinito.
    */
-  const api = {
-    cargarFiltros:          useCallback((p)  => mediator.cargarFiltros(p),              []),
-    buscarCircuitos:        useCallback((p)  => mediator.buscarCircuitos(p),             []),
-    cargarCircuito:         useCallback((id) => mediator.cargarCircuito(id),             []),
-    cargarComponentes:      useCallback(()   => mediator.cargarComponentes(),            []),
-    simularDC:              useCallback((p)  => mediator.simularDC(p),                   []),
-    simularAC:              useCallback((p)  => mediator.simularAC(p),                   []),
-    calcularTheveninNorton: useCallback((p)  => mediator.calcularTheveninNorton(p),      []),
-    calcularSuperposicion:  useCallback((p)  => mediator.calcularSuperposicion(p),       []),
-  };
+  const cargarFiltros          = useCallback((p)  => mediator.cargarFiltros(p),             []);
+  const buscarCircuitos        = useCallback((p)  => mediator.buscarCircuitos(p),            []);
+  const cargarCircuito         = useCallback((id) => mediator.cargarCircuito(id),            []);
+  const cargarComponentes      = useCallback(()   => mediator.cargarComponentes(),           []);
+  const simularDC              = useCallback((p)  => mediator.simularDC(p),                  []);
+  const simularAC              = useCallback((p)  => mediator.simularAC(p),                  []);
+  const calcularTheveninNorton = useCallback((p)  => mediator.calcularTheveninNorton(p),     []);
+  const calcularSuperposicion  = useCallback((p)  => mediator.calcularSuperposicion(p),      []);
+
+  const api = useMemo(() => ({
+    cargarFiltros,
+    buscarCircuitos,
+    cargarCircuito,
+    cargarComponentes,
+    simularDC,
+    simularAC,
+    calcularTheveninNorton,
+    calcularSuperposicion,
+  }), [
+    cargarFiltros,
+    buscarCircuitos,
+    cargarCircuito,
+    cargarComponentes,
+    simularDC,
+    simularAC,
+    calcularTheveninNorton,
+    calcularSuperposicion,
+  ]);
 
   return { state, dispatch, api };
 }
