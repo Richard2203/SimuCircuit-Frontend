@@ -36,33 +36,128 @@ function calcViewBox(netlist) {
 }
 
 function WireLayer({ netlist }) {
+
+  // Calcula los pines SVG reales de cada componente
+  // respetando los mismos offsets que usa renderComponent
+  function getPins(comp) {
+    const cx = parseFloat(comp.position?.x ?? 0) * CANVAS_SCALE + OFFSET_X;
+    const cy = parseFloat(comp.position?.y ?? 0) * CANVAS_SCALE + OFFSET_Y;
+    const rot = comp.rotation ?? 0;
+    const s = 0.38;
+
+    if (comp.type === 'fuente_voltaje') {
+      // PowerSource se renderiza con x-80, y-60
+      const rx = cx - 80;
+      const ry = cy - 60;
+      return {
+        pos: { x: rx + 575 * s, y: ry + 68  * s },  // VCC
+        neg: { x: rx + 585 * s, y: ry + 220 * s },  // GND
+      };
+    }
+
+    if (comp.type === 'resistencia' || comp.type === 'resistencia_variable') {
+      const arm = 100 * s; // 38px
+      if (rot === 90 || rot === 270) {
+        return {
+          n1: { x: cx, y: cy - arm },
+          n2: { x: cx, y: cy + arm },
+        };
+      }
+      return {
+        n1: { x: cx - arm, y: cy },
+        n2: { x: cx + arm, y: cy },
+      };
+    }
+
+    // fallback
+    return { n1: { x: cx, y: cy } };
+  }
+
+  // Mapear nodo_num → lista de posiciones SVG reales
   const nodeMap = new Map();
   netlist.forEach((comp) => {
-    const { x, y } = toSVG(comp.position);
+    const pins = getPins(comp);
     Object.entries(comp.nodes ?? {}).forEach(([pinKey, pinData]) => {
       const nodoNum = getNodoNum(pinData);
       if (!nodoNum) return;
+      const pinPos = pins[pinKey] ?? pins[Object.keys(pins)[0]];
       if (!nodeMap.has(nodoNum)) nodeMap.set(nodoNum, []);
-      nodeMap.get(nodoNum).push({ x, y, compId: comp.id, pin: pinKey });
+      nodeMap.get(nodoNum).push({ ...pinPos, compId: comp.id });
     });
   });
 
   const lines = [];
+
   nodeMap.forEach((pins, nodo) => {
     if (pins.length < 2) return;
-    for (let i = 0; i < pins.length - 1; i++) {
-      const a = pins[i], b = pins[i + 1];
+
+    const isGnd  = nodo === '0';
+    const color  = isGnd ? '#64748b' : '#e2e8f0';
+    const dash   = isGnd ? '5 3' : undefined;
+    const width  = isGnd ? 1.5 : 2;
+    const opacity = isGnd ? 0.6 : 0.95;
+
+    // Para GND: conectar todos los puntos con una línea horizontal
+    // en la Y más baja (más abajo), luego verticales desde cada pin
+    if (isGnd) {
+      const sorted = [...pins].sort((a, b) => a.x - b.x);
+      const maxY = Math.max(...sorted.map(p => p.y));
+
+      // Línea horizontal de GND en la parte inferior
       lines.push(
-        <line key={`wire-${nodo}-${i}`}
-          x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-          stroke={nodo === '0' ? '#4a5568' : '#6b7280'}
-          strokeWidth={2} strokeLinecap="round"
-          strokeDasharray={nodo === '0' ? '4 3' : undefined}
-          opacity={0.6}
+        <line key={`gnd-h`}
+          x1={sorted[0].x} y1={maxY}
+          x2={sorted[sorted.length - 1].x} y2={maxY}
+          stroke={color} strokeWidth={width} strokeLinecap="round"
+          strokeDasharray={dash} opacity={opacity}
         />
       );
+
+      // Vertical desde cada pin hacia la línea horizontal
+      sorted.forEach((p, i) => {
+        if (Math.abs(p.y - maxY) < 2) return;
+        lines.push(
+          <line key={`gnd-v-${i}`}
+            x1={p.x} y1={p.y}
+            x2={p.x} y2={maxY}
+            stroke={color} strokeWidth={width} strokeLinecap="round"
+            strokeDasharray={dash} opacity={opacity}
+          />
+        );
+      });
+
+      return;
     }
+
+    // Para nodos normales: encontrar la Y compartida (la más alta = menor Y)
+    // y trazar: verticales de cada pin a esa Y, luego horizontal que los une
+    const sorted = [...pins].sort((a, b) => a.x - b.x);
+    const topY = Math.min(...sorted.map(p => p.y));
+
+    // Línea horizontal en topY
+    lines.push(
+      <line key={`n${nodo}-h`}
+        x1={sorted[0].x} y1={topY}
+        x2={sorted[sorted.length - 1].x} y2={topY}
+        stroke={color} strokeWidth={width} strokeLinecap="round"
+        opacity={opacity}
+      />
+    );
+
+    // Vertical desde cada pin a topY (solo si no está ya en topY)
+    sorted.forEach((p, i) => {
+      if (Math.abs(p.y - topY) < 2) return;
+      lines.push(
+        <line key={`n${nodo}-v-${i}`}
+          x1={p.x} y1={p.y}
+          x2={p.x} y2={topY}
+          stroke={color} strokeWidth={width} strokeLinecap="round"
+          opacity={opacity}
+        />
+      );
+    });
   });
+
   return <g className="wires">{lines}</g>;
 }
 
