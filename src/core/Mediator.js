@@ -93,9 +93,15 @@ class SimuCircuitMediator {
         this._stopTimer();
         this._state = {
           ...this._state,
+          selectedCircuit: null,
+          netlist: [],
           view: 'library',
           simStatus: 'detenido',
           simTime: 0,
+          simResultadoDC: null,
+          simResultadoAC: null,
+          simError: null,
+          teoremaResultado: null,
         };
         break;
 
