@@ -6,13 +6,14 @@ import { Transistor }        from './models/Transistor.jsx';
 import { parseNotation }     from './models/ComponentValueLabel.jsx';
 import { Potentiometer }     from './models/Potentiometer.jsx';
 import { CurrentSource }     from './models/CurrentSource.jsx';
+import { Bobina }            from './models/Bobina.jsx';
 
 const CANVAS_SCALE = 1.8;
 const OFFSET_X     = 60;
 const OFFSET_Y     = 60;
 
 const SCALE_DEFAULT = 0.38;
-const SCALE_POT     = 1.10;
+const SCALE_POT     = 0.75;
 
 function scaleFor(type) {
   if (type === 'resistencia_variable') return SCALE_POT;
@@ -58,7 +59,7 @@ function getPins(comp) {
 
   const t = comp.type;
 
-  if (t === 'resistencia' || t === 'bobina') {
+  if (t === 'resistencia') {
     // Resistor horizontal por defecto: pines a ±100*s = ±38px
     const arm = 100 * s;
     const a = rotPt(cx, cy, -arm, 0, rot);
@@ -70,11 +71,31 @@ function getPins(comp) {
     };
   }
 
+  if (t === 'bobina') {
+    // Bobina toroidal vista de frente — patas RECTAS HACIA ABAJO.
+    // Mismos parametros que el modelo Bobina.jsx:
+    //   rOuter=56, pinLen=38, pinSpacing=16
+    //   pinDist (y desde el centro) = rOuter + pinLen = 94
+    const pinSp   = 16 * s;
+    const pinDist = (56 + 38) * s;
+    const a = rotPt(cx, cy, -pinSp, pinDist, rot);
+    const b = rotPt(cx, cy,  pinSp, pinDist, rot);
+    return {
+      n1: a, n2: b,
+      a: a, b: b,
+      'pin 1': a, 'pin 2': b, pin1: a, pin2: b,
+    };
+  }
+
   if (t === 'resistencia_variable') {
-    // pinA (izq):    (-14 * scale, +(R + pinLen) * scale) = (-5.32, +25.08)
-    // pinW (centro): (    0,        +25.08)
-    // pinB (der):    (+5.32,        +25.08)
+    // Potenciometro: 3 patas saliendo del mismo lado del cuerpo.
+    // En coords locales (antes de aplicar rotacion del modelo):
+    //   pinA (izq):    (-14 * scale, +(R + pinLen) * scale) = (-5.32, +25.08)
+    //   pinW (centro): (    0,        +25.08)
+    //   pinB (der):    (+5.32,        +25.08)
     // Con scale=0.38, R=28, pinLen=38.
+    // El modelo ademas aplica rotacion interna (orientation), pero como en el
+    // renderer pasamos rotation por <g rotate>, replicamos el mismo calculo.
     const sp = 14 * s; // pin spacing
     const dy = (28 + 38) * s; // body radius + pin length, hacia abajo (en local +y)
     const pa = rotPt(cx, cy, -sp, dy, rot);
@@ -147,6 +168,7 @@ function resolvePin(pins, pinKey) {
     a: 'n1', b: 'n2',
     positivo: 'pos', negativo: 'neg',
     vcc: 'pos', gnd: 'neg',
+    // Potenciometro: nombres en español del DB → claves canonicas
     izquierda: 'a', centro: 'w', derecha: 'b',
     izq: 'a', der: 'b', wiper: 'w',
   };
@@ -175,9 +197,11 @@ function calcViewBox(netlist) {
   return `${minX - margin} ${minY - margin} ${w} ${h}`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 // Calculo de bounding boxes de componentes para evitar que los rieles
 // horizontales atraviesen cuerpos. Se calcula una sola vez por render.
 // Cada bbox es {minX, maxX, minY, maxY, compId}.
+// ─────────────────────────────────────────────────────────────────────────────
 function getComponentBBox(comp) {
   const cx = parseFloat(comp.position?.x ?? 0) * CANVAS_SCALE + OFFSET_X;
   const cy = parseFloat(comp.position?.y ?? 0) * CANVAS_SCALE + OFFSET_Y;
@@ -201,9 +225,15 @@ function getComponentBBox(comp) {
     };
   };
 
-  if (t === 'resistencia' || t === 'bobina') {
+  if (t === 'resistencia') {
     // Cuerpo del resistor: rect ±25 en x, ±9 en y (unscaled), scale 0.38
     return rotatedBBox(25 * SCALE_DEFAULT, 9 * SCALE_DEFAULT);
+  }
+  if (t === 'bobina') {
+    // Toroide circular: radio 56 (unscaled), scale por defecto.
+    // Como es circular, bbox cuadrado ±r.
+    const R = 56 * SCALE_DEFAULT;
+    return rotatedBBox(R, R);
   }
   if (t === 'resistencia_variable') {
     // Cuerpo circular del pot, radius=28, scale 0.75
@@ -243,10 +273,18 @@ function getComponentBBox(comp) {
   return rotatedBBox(20 * SCALE_DEFAULT, 20 * SCALE_DEFAULT);
 }
 
+/**
+ * ¿La barra horizontal en y=busY de x1 a x2 atraviesa el bbox de algun
+ * componente? Por defecto considera TODOS los componentes (no solo los que
+ * no tienen pines en este nodo) — un cable que atraviesa el cuerpo de un
+ * componente se ve mal incluso si electricamente es correcto.
+ */
 function busHorizontalCollides(busY, x1, x2, bboxes, _excludedCompIds) {
   const xLo = Math.min(x1, x2);
   const xHi = Math.max(x1, x2);
- 
+  // margin de 1 px: solo tolera errores de redondeo. Si el bus pasa por
+  // dentro del bbox de un componente (incluso por su linea media), cuenta
+  // como colision.
   const margin = 1;
   for (const b of bboxes) {
     if (busY < b.minY + margin || busY > b.maxY - margin) continue;
@@ -516,20 +554,6 @@ function FallbackComp({ comp, x, y }) {
   );
 }
 
-function BobinaSVG({ comp, x, y }) {
-  const arcs = [0,1,2,3].map(i => `M ${x - 24 + i*16} ${y} a 8 8 0 0 1 16 0`);
-  return (
-    <g>
-      <path d={arcs.join(' ')} fill="none" stroke="#fbbf24" strokeWidth={2} />
-      <line x1={x-24} y1={y} x2={x-36} y2={y} stroke="#6b7280" strokeWidth={1.5} />
-      <line x1={x+40} y1={y} x2={x+52} y2={y} stroke="#6b7280" strokeWidth={1.5} />
-      <text textAnchor="middle" x={x+8} y={y+18} fontSize={9} fill="#94a3b8" fontFamily="monospace">
-        {comp.id}: {comp.value}H
-      </text>
-    </g>
-  );
-}
-
 function renderComponent(comp) {
   const { x, y } = toSVG(comp.position);
   const rotation  = comp.rotation ?? 0;
@@ -565,16 +589,14 @@ function renderComponent(comp) {
         </g>
       );
     case 'fuente_corriente':
-      // CurrentSource gestiona su propia rotacion internamente
       return (
         <CurrentSource key={comp.id} x={x} y={y} scale={0.38} rotation={rotation}
           componentId={comp.id} initialValue={valueNum} />
       );
     case 'bobina':
       return (
-        <g key={comp.id} transform={wrapRotation}>
-          <BobinaSVG comp={comp} x={x} y={y} />
-        </g>
+        <Bobina key={comp.id} x={x} y={y} scale={0.38} rotation={rotation}
+          componentId={comp.id} initialValue={valueNum} />
       );
     case 'diodo':
       return (
