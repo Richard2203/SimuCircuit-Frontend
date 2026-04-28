@@ -51,8 +51,6 @@ async function getCircuitos(params = {}) {
  */
 async function getCircuitoById(id) {
   const res = await apiClient.get(`/api/circuitos/${id}`);
-  console.log(JSON.stringify(res.data, null, 2)); // Debug: muestra la respuesta completa
-
   return res.data;
 }
 
