@@ -9,6 +9,7 @@ import { parseNotation }     from './models/ComponentValueLabel.jsx';
 import { Potentiometer }     from './models/Potentiometer.jsx';
 import { CurrentSource }     from './models/CurrentSource.jsx';
 import { Bobina }            from './models/Bobina.jsx';
+import { LED } from './models/led.jsx';
 
 const CANVAS_SCALE = 1.8;
 const OFFSET_X     = 60;
@@ -185,6 +186,22 @@ function getPins(comp) {
       anodo: a, anode: a, catodo: b, cathode: b,
     };
   }
+
+  
+  if (t === 'diodo_led') {
+    // Led: ánodo a la izquierda, cátodo a la derecha.
+    //   pinA local = (-85*scale, 0), pinB local = (+85*scale, 0)
+    const arm = 85 * s;
+    const a = rotPt(cx, cy, -arm, 0, rot);
+    const b = rotPt(cx, cy,  arm, 0, rot);
+    return {
+      n1: a, n2: b,
+      a: a, b: b,
+      'pin 1': a, 'pin 2': b, pin1: a, pin2: b,
+      anodo: a, anode: a, catodo: b, cathode: b,
+    };
+  }
+
 
   // transistores: aproximación con pines en triángulo (base/colector/emisor)
   if (t === 'transistor_bjt' || t === 'transistor_fet') {
@@ -744,6 +761,13 @@ function renderComponent(comp) {
       return (
         <g key={comp.id} transform={wrapRotation}>
           <DiodoRectificador x={x} y={y} scale={SCALE_DEFAULT} orientation={orientation}
+            componentId={comp.id} initialValue={valueNum} />
+        </g>
+      );
+    case 'diodo_led':
+      return (
+        <g key={comp.id} transform={wrapRotation}>
+          <LED x={x} y={y} scale={SCALE_DEFAULT} orientation={orientation}
             componentId={comp.id} initialValue={valueNum} />
         </g>
       );
