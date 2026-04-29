@@ -18,9 +18,6 @@ const OFFSET_Y     = 60;
  * Scale visual de cada componente. Por defecto todos usan 0.38, pero el
  * potenciómetro tiene 3 patas muy juntas: con un scale tan pequeño es
  * imposible distinguir a cuál pata se conecta cada cable. Lo subimos.
- *
- * IMPORTANTE: getPins() y renderComponent() deben usar EL MISMO valor,
- * de lo contrario los cables salen del centro del pot en vez de las patas.
  */
 const SCALE_DEFAULT = 0.38;
 const SCALE_POT     = 0.75;
@@ -65,7 +62,7 @@ function getPins(comp) {
   const cx = parseFloat(comp.position?.x ?? 0) * CANVAS_SCALE + OFFSET_X;
   const cy = parseFloat(comp.position?.y ?? 0) * CANVAS_SCALE + OFFSET_Y;
   const rot = comp.rotation ?? 0;
-  const s   = scaleFor(comp.type); // mismo scale que renderComponent
+  const s   = scaleFor(comp.type);
 
   const t = comp.type;
 
@@ -82,10 +79,8 @@ function getPins(comp) {
   }
 
   if (t === 'bobina') {
-    // Bobina toroidal vista de frente — patas RECTAS HACIA ABAJO.
-    // Mismos parámetros que el modelo Bobina.jsx:
+    // Bobina toroidal vista de frente — patas RECTAS HACIA ABAJO en local.
     //   rOuter=56, pinLen=38, pinSpacing=16
-    //   pinDist (y desde el centro) = rOuter + pinLen = 94
     const pinSp   = 16 * s;
     const pinDist = (56 + 38) * s;
     const a = rotPt(cx, cy, -pinSp, pinDist, rot);
@@ -98,23 +93,16 @@ function getPins(comp) {
   }
 
   if (t === 'resistencia_variable') {
-    // Potenciómetro: 3 patas saliendo del mismo lado del cuerpo.
-    // En coords locales (antes de aplicar rotación del modelo):
-    //   pinA (izq):    (-14 * scale, +(R + pinLen) * scale) = (-5.32, +25.08)
-    //   pinW (centro): (    0,        +25.08)
-    //   pinB (der):    (+5.32,        +25.08)
-    // Con scale=0.38, R=28, pinLen=38.
-    // El modelo además aplica rotación interna (orientation), pero como en el
-    // renderer pasamos rotation por <g rotate>, replicamos el mismo cálculo.
-    const sp = 14 * s; // pin spacing
-    const dy = (28 + 38) * s; // body radius + pin length, hacia abajo (en local +y)
+    // Potenciómetro: 3 patas saliendo hacia abajo desde el cuerpo circular.
+    //   pinSpacing=14, R=28, pinLen=38
+    const sp = 14 * s;
+    const dy = (28 + 38) * s;
     const pa = rotPt(cx, cy, -sp, dy, rot);
     const pw = rotPt(cx, cy,   0, dy, rot);
     const pb = rotPt(cx, cy,  sp, dy, rot);
     return {
       a: pa, w: pw, b: pb,
-      // Aliases para tolerar distintos nombres en el campo pin_terminal
-      n1: pa, n3: pb, wiper: pw,
+      n1: pa, n2: pw, n3: pb, wiper: pw,
       'pin 1': pa, 'pin 2': pw, 'pin 3': pb,
       pin1: pa, pin2: pw, pin3: pb,
       izquierda: pa, centro: pw, derecha: pb,
@@ -123,17 +111,11 @@ function getPins(comp) {
   }
 
   if (t === 'capacitor') {
-    // Discriminar el subtipo: cerámico (no polarizado, patas hacia abajo)
-    // vs electrolítico/tantalio (polarizado, eje horizontal/vertical).
     const tipoD = (comp.params?.tipo_dioelectrico || '').toLowerCase();
     const esCeramico = tipoD.includes('ceram') || tipoD.includes('cerám');
 
     if (esCeramico) {
-      // CapacitorCeramico: bipolar vertical clásico — un pin arriba, otro abajo.
-      //   bodyH=78, bodyTopY=-bodyH*0.55=-42.9, bodyBotY=bodyH*0.30=23.4
-      //   pinLen=38
-      //   pinTop  = bodyTopY - pinLen = -80.9 (arriba del cuerpo)
-      //   pinBot  = bodyBotY + pinLen = +61.4 (abajo del cuerpo)
+      // CapacitorCeramico: bipolar vertical clásico
       const pinTopY = (-42.9 - 38) * s;
       const pinBotY = ( 23.4 + 38) * s;
       const a = rotPt(cx, cy, 0, pinTopY, rot);
@@ -141,7 +123,7 @@ function getPins(comp) {
       return { n1: a, n2: b, a, b, 'pin 1': a, 'pin 2': b, pin1: a, pin2: b };
     }
 
-    // Capacitor electrolítico / tantalio (modelo cilíndrico tradicional)
+    // Capacitor electrolítico / tantalio (cilíndrico, pines escalonados)
     const orientation = (rot === 90 || rot === 270) ? 'vertical' : 'horizontal';
     let pinA, pinB;
     if (orientation === 'horizontal') {
@@ -151,17 +133,14 @@ function getPins(comp) {
       pinA = { x: cx - 24 * s, y: cy + 108 * s };
       pinB = { x: cx + 23 * s, y: cy + 108 * s };
     }
-    return { n1: pinA, n2: pinB, a: pinA, b: pinB };
+    return { n1: pinA, n2: pinB, a: pinA, b: pinB, 'pin 1': pinA, 'pin 2': pinB, pin1: pinA, pin2: pinB };
   }
 
   if (t === 'fuente_voltaje') {
-    // Discriminar AC senoidal vs DC.
     const esAC = (comp.params?.dcOrAc || '').toLowerCase() === 'ac';
 
     if (esAC) {
-      // ACSource: círculo centrado en (cx, cy). R=60, armLen=78, scale=0.38
-      // pinPos a la derecha, pinNeg a la izquierda, ambos a y=0 (alineados).
-      // pinDist = (R + armLen) * scale = 138 * 0.38 = 52.44
+      // ACSource: círculo con pines alineados al eje horizontal.
       const pinDist = (60 + 78) * s;
       const pos = rotPt(cx, cy,  pinDist, 0, rot);
       const neg = rotPt(cx, cy, -pinDist, 0, rot);
@@ -172,9 +151,7 @@ function getPins(comp) {
       };
     }
 
-    // PowerSource (DC) se renderiza con (x-80, y-60) y scale=0.38.
-    // Pines del modelo (en local, antes del offset): pinA=(575*s, 68*s), pinB=(585*s, 220*s).
-    // Tras el offset (-80, -60): pinA=(cx+138.5, cy-34.16), pinB=(cx+142.3, cy+23.6).
+    // PowerSource (DC): cuerpo de fuente de laboratorio, pines a la derecha.
     const pos = rotPt(cx, cy,  138.5, -34.16, rot);
     const neg = rotPt(cx, cy,  142.3,  23.60, rot);
     return {
@@ -185,7 +162,7 @@ function getPins(comp) {
   }
 
   if (t === 'fuente_corriente') {
-    // CurrentSource: pos arriba, neg abajo a ±38px.
+    // CurrentSource: pos arriba, neg abajo a ±38px (en SVG, ya escalado).
     const pos = rotPt(cx, cy, 0, -38, rot);
     const neg = rotPt(cx, cy, 0,  38, rot);
     return {
@@ -195,7 +172,34 @@ function getPins(comp) {
     };
   }
 
-  // diodo, transistores: fallback al centro
+  if (t === 'diodo') {
+    // DiodoRectificador: ánodo a la izquierda, cátodo a la derecha.
+    //   pinA local = (-85*scale, 0), pinB local = (+85*scale, 0)
+    const arm = 85 * s;
+    const a = rotPt(cx, cy, -arm, 0, rot);
+    const b = rotPt(cx, cy,  arm, 0, rot);
+    return {
+      n1: a, n2: b,
+      a: a, b: b,
+      'pin 1': a, 'pin 2': b, pin1: a, pin2: b,
+      anodo: a, anode: a, catodo: b, cathode: b,
+    };
+  }
+
+  // transistores: aproximación con pines en triángulo (base/colector/emisor)
+  if (t === 'transistor_bjt' || t === 'transistor_fet') {
+    const arm = 60 * s;
+    const top = rotPt(cx, cy,   0, -arm, rot);
+    const bl  = rotPt(cx, cy, -arm, arm, rot);
+    const br  = rotPt(cx, cy,  arm, arm, rot);
+    return {
+      base: bl, colector: top, emisor: br, b: bl, c: top, e: br,
+      gate: bl, drain: top, source: br, g: bl, d: top, s: br,
+      nB: bl, nC: top, nE: br, nG: bl, nD: top, nS: br,
+    };
+  }
+
+  // fallback
   return { n1: { x: cx, y: cy }, n2: { x: cx, y: cy } };
 }
 
@@ -214,9 +218,9 @@ function resolvePin(pins, pinKey) {
     a: 'n1', b: 'n2',
     positivo: 'pos', negativo: 'neg',
     vcc: 'pos', gnd: 'neg',
-    // Potenciómetro: nombres en español del DB → claves canónicas
     izquierda: 'a', centro: 'w', derecha: 'b',
     izq: 'a', der: 'b', wiper: 'w',
+    anodo: 'a', anode: 'a', catodo: 'b', cathode: 'b',
   };
   if (aliases[compact] && pins[aliases[compact]]) return pins[aliases[compact]];
   const first = Object.values(pins)[0];
@@ -245,8 +249,7 @@ function calcViewBox(netlist) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cálculo de bounding boxes de componentes para evitar que los rieles
-// horizontales atraviesen cuerpos. Se calcula una sola vez por render.
-// Cada bbox es {minX, maxX, minY, maxY, compId}.
+// horizontales atraviesen cuerpos.
 // ─────────────────────────────────────────────────────────────────────────────
 function getComponentBBox(comp) {
   const cx = parseFloat(comp.position?.x ?? 0) * CANVAS_SCALE + OFFSET_X;
@@ -254,7 +257,6 @@ function getComponentBBox(comp) {
   const rot = comp.rotation ?? 0;
   const t   = comp.type;
 
-  // Función auxiliar: calcula bbox aplicando rotación a un rect local
   const rotatedBBox = (halfW, halfH) => {
     const corners = [
       rotPt(cx, cy, -halfW, -halfH, rot),
@@ -272,26 +274,20 @@ function getComponentBBox(comp) {
   };
 
   if (t === 'resistencia') {
-    // Cuerpo del resistor: rect ±25 en x, ±9 en y (unscaled), scale 0.38
     return rotatedBBox(25 * SCALE_DEFAULT, 9 * SCALE_DEFAULT);
   }
   if (t === 'bobina') {
-    // Toroide circular: radio 56 (unscaled), scale por defecto.
-    // Como es circular, bbox cuadrado ±r.
     const R = 56 * SCALE_DEFAULT;
     return rotatedBBox(R, R);
   }
   if (t === 'resistencia_variable') {
-    // Cuerpo circular del pot, radius=28, scale 0.75
     const R = 28 * SCALE_POT;
     return rotatedBBox(R, R);
   }
   if (t === 'capacitor') {
-    // Cerámico tiene cuerpo más alto (blob), electrolítico es cilíndrico/aplanado
     const tipoD = (comp.params?.tipo_dioelectrico || '').toLowerCase();
     const esCeramico = tipoD.includes('ceram') || tipoD.includes('cerám');
     if (esCeramico) {
-      // bodyW=70, bodyH=78 unscaled — bbox amplio
       return rotatedBBox(35 * SCALE_DEFAULT, 39 * SCALE_DEFAULT);
     }
     return rotatedBBox(40 * SCALE_DEFAULT, 30 * SCALE_DEFAULT);
@@ -299,15 +295,10 @@ function getComponentBBox(comp) {
   if (t === 'fuente_voltaje') {
     const esAC = (comp.params?.dcOrAc || '').toLowerCase() === 'ac';
     if (esAC) {
-      // ACSource: círculo radio 60 unscaled, scale 0.38 → bbox cuadrado ±60*scale
       const R = 60 * SCALE_DEFAULT;
       return rotatedBBox(R, R);
     }
-    // Body offset (-80, -60) con rect 106 a 484 en x, 43 a 220 en y
-    // Centro del body en (cx + (106+484)/2 - 80, cy + (43+220)/2 - 60) = (cx + 215, cy + 71.5) en unscaled
-    // Pero en scaled (0.38): centro en (cx + 215*0.38 - 80*0.38, cy + 71.5*0.38 - 60*0.38) ≈ (cx + 51.3, cy + 4.4)
-    // Half size: ((484-106)/2, (220-43)/2) * 0.38 = (71.8, 33.6)
-    // Para simplificar: usa bbox amplio que cubra todo
+    // Fuente DC con cuerpo desplazado respecto a (cx,cy) por (-80,-60)
     const cxBody = cx + 51.3;
     const cyBody = cy + 4.4;
     const corners = [
@@ -325,27 +316,26 @@ function getComponentBBox(comp) {
     };
   }
   if (t === 'fuente_corriente') {
-    // Círculo radio 25 (unscaled) * scale 0.38 ≈ 9.5
     return rotatedBBox(25 * SCALE_DEFAULT, 25 * SCALE_DEFAULT);
   }
-  // Diodos, transistores: bbox conservador
+  if (t === 'diodo') {
+    // Cuerpo del diodo: rect ±60 en x (sin pines), ±25 en y, scale 0.38
+    return rotatedBBox(60 * SCALE_DEFAULT, 25 * SCALE_DEFAULT);
+  }
+  // Transistores: bbox conservador
   return rotatedBBox(20 * SCALE_DEFAULT, 20 * SCALE_DEFAULT);
 }
 
 /**
- * ¿La barra horizontal en y=busY de x1 a x2 atraviesa el bbox de algún
- * componente? Por defecto considera TODOS los componentes (no solo los que
- * no tienen pines en este nodo) — un cable que atraviesa el cuerpo de un
- * componente se ve mal incluso si eléctricamente es correcto.
+ * ¿Una línea horizontal en y=Y, de x1 a x2, atraviesa el bbox de algún
+ * componente que NO esté en excludeIds?
  */
-function busHorizontalCollides(busY, x1, x2, bboxes, _excludedCompIds) {
+function busHCollides(busY, x1, x2, bboxes, excludeIds = new Set()) {
   const xLo = Math.min(x1, x2);
   const xHi = Math.max(x1, x2);
-  // margin de 1 px: solo tolera errores de redondeo. Si el bus pasa por
-  // dentro del bbox de un componente (incluso por su línea media), cuenta
-  // como colisión.
   const margin = 1;
   for (const b of bboxes) {
+    if (excludeIds.has(b.compId)) continue;
     if (busY < b.minY + margin || busY > b.maxY - margin) continue;
     if (xHi < b.minX || xLo > b.maxX) continue;
     return true;
@@ -354,40 +344,104 @@ function busHorizontalCollides(busY, x1, x2, bboxes, _excludedCompIds) {
 }
 
 /**
- * Distancia mínima del bus a cualquier bbox en la franja x1..x2.
- * Devuelve Infinity si no hay bboxes solapando en X.
- * Si el bus YA está dentro de un bbox, devuelve un valor negativo.
+ * ¿Una línea vertical en x=X, de y1 a y2, atraviesa el bbox de algún
+ * componente que NO esté en excludeIds?
  */
-function busClearance(busY, x1, x2, bboxes) {
-  const xLo = Math.min(x1, x2);
-  const xHi = Math.max(x1, x2);
-  let minDist = Infinity;
+function busVCollides(busX, y1, y2, bboxes, excludeIds = new Set()) {
+  const yLo = Math.min(y1, y2);
+  const yHi = Math.max(y1, y2);
+  const margin = 1;
   for (const b of bboxes) {
-    if (xHi < b.minX || xLo > b.maxX) continue; // no overlap en X
-    if (busY >= b.minY && busY <= b.maxY) {
-      // dentro del bbox
-      return -1;
-    }
-    const dist = busY < b.minY ? b.minY - busY : busY - b.maxY;
-    if (dist < minDist) minDist = dist;
+    if (excludeIds.has(b.compId)) continue;
+    if (busX < b.minX + margin || busX > b.maxX - margin) continue;
+    if (yHi < b.minY || yLo > b.maxY) continue;
+    return true;
   }
-  return minDist;
+  return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers para construir cables ortogonales
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Construye una L-shape entre dos puntos eligiendo la "esquina" óptima.
+ * Devuelve dos segmentos [seg1, seg2] o un único segmento si comparten X o Y.
+ * Cada segmento es { x1, y1, x2, y2 }.
+ */
+function buildLPath(p1, p2, bboxes, excludeIds) {
+  const dx = Math.abs(p2.x - p1.x);
+  const dy = Math.abs(p2.y - p1.y);
+
+  // Mismo X → barra vertical
+  if (dx < 1.5) {
+    return [{ x1: p1.x, y1: p1.y, x2: p1.x, y2: p2.y }];
+  }
+  // Mismo Y → barra horizontal
+  if (dy < 1.5) {
+    return [{ x1: p1.x, y1: p1.y, x2: p2.x, y2: p1.y }];
+  }
+
+  // Dos opciones de codo:
+  //   Opción A: vertical primero — codo en (p1.x, p2.y)
+  //   Opción B: horizontal primero — codo en (p2.x, p1.y)
+  const optA = [
+    { x1: p1.x, y1: p1.y, x2: p1.x, y2: p2.y },           // V de p1 a p2.y
+    { x1: p1.x, y1: p2.y, x2: p2.x, y2: p2.y },           // H hasta p2
+  ];
+  const optB = [
+    { x1: p1.x, y1: p1.y, x2: p2.x, y2: p1.y },           // H hasta p2.x
+    { x1: p2.x, y1: p1.y, x2: p2.x, y2: p2.y },           // V hasta p2
+  ];
+
+  const collidesA =
+    busVCollides(p1.x, p1.y, p2.y, bboxes, excludeIds) ||
+    busHCollides(p2.y, p1.x, p2.x, bboxes, excludeIds);
+  const collidesB =
+    busHCollides(p1.y, p1.x, p2.x, bboxes, excludeIds) ||
+    busVCollides(p2.x, p1.y, p2.y, bboxes, excludeIds);
+
+  if (!collidesA) return optA;
+  if (!collidesB) return optB;
+
+  // Ambas chocan: intentar un "z-shape" sacando el codo intermedio fuera.
+  // Probar Y intermedio por arriba y por abajo de los bboxes solapantes.
+  const candidates = [];
+  bboxes.forEach((b) => {
+    if (excludeIds.has(b.compId)) return;
+    candidates.push(b.minY - 16);
+    candidates.push(b.maxY + 16);
+  });
+  candidates.push((p1.y + p2.y) / 2);
+
+  for (const yMid of candidates) {
+    const segs = [
+      { x1: p1.x, y1: p1.y, x2: p1.x, y2: yMid },
+      { x1: p1.x, y1: yMid, x2: p2.x, y2: yMid },
+      { x1: p2.x, y1: yMid, x2: p2.x, y2: p2.y },
+    ];
+    const ok =
+      !busVCollides(p1.x, p1.y, yMid, bboxes, excludeIds) &&
+      !busHCollides(yMid, p1.x, p2.x, bboxes, excludeIds) &&
+      !busVCollides(p2.x, yMid, p2.y, bboxes, excludeIds);
+    if (ok) return segs;
+  }
+
+  // Último recurso: optA
+  return optA;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WireLayer — Cables ortogonales que conectan en los terminales reales.
 //
 // Algoritmo:
-//   1. Para cada nodo (numero_nodo) recolectamos las posiciones SVG de todos
-//      los pines que pertenecen a ese nodo.
-//   2. Si todos los pines comparten X (o casi) → barra vertical.
-//      Si comparten Y → barra horizontal.
-//   3. Caso general → "peine" ortogonal: una barra horizontal a la Y modal
-//      del nodo, con bajadas/subidas verticales desde cada pin.
-//   4. Para GND (nodo 0) la barra va a la Y máxima (pantalla abajo).
-//   5. Si la barra atraviesa un componente que NO pertenece al nodo,
-//      la movemos hacia arriba o abajo hasta encontrar una banda libre.
-//   6. Solo segmentos H/V — nunca diagonales.
+//   • 2 pines  → L-shape (con desvío en Z si ambos codos chocan).
+//   • 3+ pines → Peine ortogonal: barra horizontal a Y modal/mediana
+//                + stubs verticales desde cada pin.
+//   • GND      → barra al ymax (riel inferior).
+//   • Si la barra atraviesa un componente que NO pertenece al nodo,
+//     se mueve hacia arriba o abajo hasta encontrar una banda libre.
+//   • Solo segmentos H/V — nunca diagonales.
 // ─────────────────────────────────────────────────────────────────────────────
 function WireLayer({ netlist }) {
 
@@ -420,12 +474,29 @@ function WireLayer({ netlist }) {
     const width = isGnd ? 1.5 : 2;
     const opacity = isGnd ? 0.7 : 0.95;
 
-    const xs = pins.map(p => p.x);
-    const ys = pins.map(p => p.y);
+    const ownCompIds = new Set(pins.map((p) => p.compId));
+
+    // ── Caso 2 pines: L-shape (con anti-colisión) ──
+    if (pins.length === 2 && !isGnd) {
+      const segs = buildLPath(pins[0], pins[1], allBBoxes, ownCompIds);
+      segs.forEach((seg, i) => {
+        lines.push(
+          <line key={`n${nodo}-seg-${i}`}
+            x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2}
+            stroke={color} strokeWidth={width}
+            strokeLinecap="round" strokeDasharray={dash} opacity={opacity}
+          />
+        );
+      });
+      return;
+    }
+
+    const xs = pins.map((p) => p.x);
+    const ys = pins.map((p) => p.y);
     const xRange = Math.max(...xs) - Math.min(...xs);
     const yRange = Math.max(...ys) - Math.min(...ys);
 
-    // Caso 1: barra vertical (todos comparten X)
+    // ── Caso 1: barra vertical (todos comparten X) ──
     if (xRange < 4 && yRange > 4) {
       const x0 = pins[0].x;
       const ymin = Math.min(...ys);
@@ -440,7 +511,7 @@ function WireLayer({ netlist }) {
       return;
     }
 
-    // Caso 2: barra horizontal (todos comparten Y)
+    // ── Caso 2: barra horizontal (todos comparten Y) ──
     if (yRange < 4 && xRange > 4) {
       const y0 = pins[0].y;
       const xmin = Math.min(...xs);
@@ -455,16 +526,22 @@ function WireLayer({ netlist }) {
       return;
     }
 
-    // Caso 3 (general): peine ortogonal
+    // ── Caso 3 (general, 3+ pines): peine ortogonal ──
     let busY;
     if (isGnd) {
-      busY = Math.max(...ys);
+      // GND siempre va al riel inferior, BAJO los cuerpos de los componentes
+      // que comparten X-range — esto evita que el riel "rasque" la base
+      // de un resistor vertical o de un capacitor.
+      const xLo = Math.min(...xs);
+      const xHi = Math.max(...xs);
+      let yMaxBody = Math.max(...ys);
+      for (const b of allBBoxes) {
+        if (xHi < b.minX || xLo > b.maxX) continue;
+        if (b.maxY > yMaxBody) yMaxBody = b.maxY;
+      }
+      busY = yMaxBody + 28;
     } else {
-      // Estrategia:
-      //  (a) Si hay una Y compartida por ≥2 pines (modal), úsala como riel —
-      //      así varios pines quedan directamente sobre el riel sin stubs.
-      //  (b) Si no hay coincidencia, usa la Y mediana — minimiza la longitud
-      //      total de los stubs verticales.
+      // Y modal entre los pines (≥2 coincidencias) o mediana en su defecto.
       const yCount = new Map();
       pins.forEach(p => {
         const yKey = Math.round(p.y);
@@ -485,58 +562,47 @@ function WireLayer({ netlist }) {
     const xmin = Math.min(...xs);
     const xmax = Math.max(...xs);
 
-    // ── Anti-colisión: si la barra atraviesa el cuerpo de algún componente,
-    //    intentamos rutas alternativas. Si los pines del nodo abarcan un
-    //    rango Y grande (≥80 px), el cable es de "transmisión" y debería
-    //    ir por arriba del todo. Si no, usamos el bbox-top más cercano.
-    //    NO se aplica a GND, que siempre va por debajo.
-    const ownCompIds = new Set(pins.map(p => p.compId));
-    if (!isGnd && busHorizontalCollides(busY, xmin, xmax, allBBoxes, ownCompIds)) {
+    // ── Anti-colisión: si la barra atraviesa cuerpos no-propios, moverla.
+    if (!isGnd && busHCollides(busY, xmin, xmax, allBBoxes, ownCompIds)) {
       const CLEARANCE = 24;
       let bestY = null;
 
-      // Estrategia A: si el nodo es "grande" (yRange >= 80), elegir el
-      // Y del pin más alto menos un margen → el bus pasa al lado del
-      // pin más alto, los demás pines bajan/suben con stubs verticales.
+      // Estrategia A: rangos Y "grandes" (>=80) → bus por encima del pin más alto
       if (yRange >= 80) {
         const yMinPin = Math.min(...ys);
-        const candidate = yMinPin;
-        if (!busHorizontalCollides(candidate, xmin, xmax, allBBoxes, ownCompIds)) {
+        const candidate = yMinPin - CLEARANCE;
+        if (!busHCollides(candidate, xmin, xmax, allBBoxes, ownCompIds)) {
           bestY = candidate;
-        } else {
-          // Probar un poquito arriba del pin más alto
-          const candidate2 = yMinPin - CLEARANCE;
-          if (!busHorizontalCollides(candidate2, xmin, xmax, allBBoxes, ownCompIds)) {
-            bestY = candidate2;
-          }
         }
       }
 
-      // Estrategia B (fallback): bbox-top más cercano - clearance.
+      // Estrategia B: bbox-top más cercano - clearance
       if (bestY === null) {
         let topMostY = Infinity;
         for (const b of allBBoxes) {
+          if (ownCompIds.has(b.compId)) continue;
           if (xmax < b.minX || xmin > b.maxX) continue;
           if (b.minY < topMostY) topMostY = b.minY;
         }
         if (topMostY !== Infinity) {
           const candidate = topMostY - CLEARANCE;
-          if (!busHorizontalCollides(candidate, xmin, xmax, allBBoxes, ownCompIds)) {
+          if (!busHCollides(candidate, xmin, xmax, allBBoxes, ownCompIds)) {
             bestY = candidate;
           }
         }
       }
 
-      // Estrategia C (último recurso): por debajo de todo.
+      // Estrategia C: por debajo de todo
       if (bestY === null) {
         let bottomMostY = -Infinity;
         for (const b of allBBoxes) {
+          if (ownCompIds.has(b.compId)) continue;
           if (xmax < b.minX || xmin > b.maxX) continue;
           if (b.maxY > bottomMostY) bottomMostY = b.maxY;
         }
         if (bottomMostY !== -Infinity) {
           const candidate = bottomMostY + CLEARANCE;
-          if (!busHorizontalCollides(candidate, xmin, xmax, allBBoxes, ownCompIds)) {
+          if (!busHCollides(candidate, xmin, xmax, allBBoxes, ownCompIds)) {
             bestY = candidate;
           }
         }
@@ -568,7 +634,6 @@ function WireLayer({ netlist }) {
     // Punto de unión cuando 3+ pines coinciden eléctricamente
     if (!isGnd && pins.length >= 3) {
       pins.forEach((p, i) => {
-        // Si el pin no está sobre el riel, su stub se une al riel en (p.x, busY).
         if (Math.abs(p.y - busY) > 1.5) {
           dots.push({ x: p.x, y: busY, key: `n${nodo}-dot-${i}` });
         }
@@ -624,7 +689,7 @@ function renderComponent(comp) {
     case 'resistencia':
       return (
         <g key={comp.id} transform={wrapRotation}>
-          <Resistor x={x} y={y} scale={0.38} componentId={comp.id} initialValue={valueNum} />
+          <Resistor x={x} y={y} scale={SCALE_DEFAULT} componentId={comp.id} initialValue={valueNum} />
         </g>
       );
     case 'resistencia_variable':
@@ -634,58 +699,51 @@ function renderComponent(comp) {
         </g>
       );
     case 'capacitor': {
-      // Discriminar por tipo dieléctrico:
-      //  - Cerámico → CapacitorCeramico (no polarizado, blob cobre con código numérico)
-      //  - Electrolítico / Tantalio / otros → Capacitor (polarizado, cilindro)
       const tipoD = (comp.params?.tipo_dioelectrico || '').toLowerCase();
       const esCeramico = tipoD.includes('ceram') || tipoD.includes('cerám');
       if (esCeramico) {
         return (
-          <CapacitorCeramico key={comp.id} x={x} y={y} scale={0.38}
+          <CapacitorCeramico key={comp.id} x={x} y={y} scale={SCALE_DEFAULT}
             rotation={rotation} componentId={comp.id} initialValue={valueNum} />
         );
       }
       return (
         <g key={comp.id}>
-          <Capacitor x={x} y={y} scale={0.38} orientation={orientation}
+          <Capacitor x={x} y={y} scale={SCALE_DEFAULT} orientation={orientation}
             componentId={comp.id} initialValue={valueNum} />
         </g>
       );
     }
     case 'fuente_voltaje': {
-      // Discriminar AC senoidal vs DC. El backend marca params.dcOrAc='ac' cuando
-      // tipo_senial='AC_SENOIDAL'.
       const esAC = (comp.params?.dcOrAc || '').toLowerCase() === 'ac';
       if (esAC) {
         const freq = parseFloat(comp.params?.frequency) || 60;
         return (
-          <ACSource key={comp.id} x={x} y={y} scale={0.38} rotation={rotation}
+          <ACSource key={comp.id} x={x} y={y} scale={SCALE_DEFAULT} rotation={rotation}
             componentId={comp.id} initialValue={valueNum} frequency={freq} />
         );
       }
       return (
         <g key={comp.id} transform={wrapRotation}>
-          <PowerSource x={x - 80} y={y - 60} scale={0.38}
+          <PowerSource x={x - 80} y={y - 60} scale={SCALE_DEFAULT}
             componentId={comp.id} initialValue={valueNum} />
         </g>
       );
     }
     case 'fuente_corriente':
-      // CurrentSource gestiona su propia rotación internamente
       return (
-        <CurrentSource key={comp.id} x={x} y={y} scale={0.38} rotation={rotation}
+        <CurrentSource key={comp.id} x={x} y={y} scale={SCALE_DEFAULT} rotation={rotation}
           componentId={comp.id} initialValue={valueNum} />
       );
     case 'bobina':
-      // Bobina maneja su propia rotación internamente
       return (
-        <Bobina key={comp.id} x={x} y={y} scale={0.38} rotation={rotation}
+        <Bobina key={comp.id} x={x} y={y} scale={SCALE_DEFAULT} rotation={rotation}
           componentId={comp.id} initialValue={valueNum} />
       );
     case 'diodo':
       return (
         <g key={comp.id} transform={wrapRotation}>
-          <DiodoRectificador x={x} y={y} scale={0.38} orientation={orientation}
+          <DiodoRectificador x={x} y={y} scale={SCALE_DEFAULT} orientation={orientation}
             componentId={comp.id} initialValue={valueNum} />
         </g>
       );
@@ -693,7 +751,7 @@ function renderComponent(comp) {
     case 'transistor_fet':
       return (
         <g key={comp.id} transform={wrapRotation}>
-          <Transistor x={x} y={y} scale={0.38} componentId={comp.id} />
+          <Transistor x={x} y={y} scale={SCALE_DEFAULT} componentId={comp.id} />
         </g>
       );
     default:
@@ -716,7 +774,7 @@ export function NetlistRenderer({ netlist, preview = false }) {
 
   const viewBox = calcViewBox(netlist);
 
-  // Recolectar el pin GND más bajo para anclar el símbolo de tierra
+  // Recolectar pin GND más bajo para anclar el símbolo de tierra
   const gndPins = [];
   netlist.forEach((comp) => {
     const pins = getPins(comp);
@@ -746,7 +804,7 @@ export function NetlistRenderer({ netlist, preview = false }) {
       <WireLayer netlist={netlist} />
 
       {!preview && gndAnchor && (
-        <GndSymbol x={gndAnchor.x} y={gndAnchor.y + 8} />
+        <GndSymbol x={gndAnchor.x} y={gndAnchor.y + 18} />
       )}
 
       {netlist.map((comp) => renderComponent(comp))}
