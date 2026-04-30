@@ -8,10 +8,6 @@ import { WaveformChart }      from './WaveformChart';
 import { SimulatorSidebar }   from './SimulatorSidebar';
 import { TeoremasPanel }       from './TeoremasPanel';
 
-/**
- * Normaliza un circuito independientemente de si viene del dataset local
- * (name, difficulty, R, C…) o de la API (nombre_circuito, dificultad, netlist…).
- */
 function normalizar(c, netlist) {
   const name       = c.name ?? c.nombre_circuito ?? c.nombre ?? '—';
   const difficulty = c.difficulty ?? c.dificultad ?? '';
@@ -19,18 +15,15 @@ function normalizar(c, netlist) {
   const topic      = c.topic ?? c.unidad_tematica ?? '';
   const desc       = c.descripcion ?? c.description ?? null;
 
-  // Métricas: preferir campos locales; si son de la API, calcular desde netlist
   let voltage    = c.voltage    ?? 0;
   let current    = c.current    ?? 0;
   let resistance = c.resistance ?? 0;
 
-  // Para circuitos de la API, extraer valor de la primera fuente de voltaje
   if (!voltage && Array.isArray(netlist) && netlist.length > 0) {
     const fv = netlist.find((n) => n.type === 'fuente_voltaje');
     if (fv) voltage = parseFloat(fv.value) || 0;
     const fc = netlist.find((n) => n.type === 'fuente_corriente');
     if (fc) current = parseFloat(fc.value) || 0;
-    // R equivalente: primera resistencia como referencia
     const r = netlist.find((n) => n.type === 'resistencia');
     if (r) resistance = parseFloat(r.value) || 0;
   }
@@ -38,13 +31,6 @@ function normalizar(c, netlist) {
   return { name, difficulty, unit, topic, desc, voltage, current, resistance };
 }
 
-/**
- * Simulator — Vista del simulador activo.
- * Recibe state, dispatch y api desde App a través del Mediator.
- * No llama directamente a ningún servicio; todo pasa por api.*.
- *
- * @param {{ state: object, dispatch: Function, api: object }} props
- */
 export function Simulator({ state, dispatch, api }) {
   const {
     selectedCircuit: c,
@@ -57,29 +43,23 @@ export function Simulator({ state, dispatch, api }) {
     netlist,
     teoremaResultado,
   } = state;
-  
+
   const svgContainerRef = useRef(null);
   const simTime = useSimTime();
 
-
   const exportToPNG = async () => {
     if (!svgContainerRef.current) return;
-
-    // Busca el SVG dentro del contenedor
     const svgElement = svgContainerRef.current.querySelector('svg');
     if (!svgElement) {
       console.warn('No se encontró el SVG para exportar');
       return;
     }
-
     try {
-      // Configura opciones para mantener el fondo y escala
       const dataUrl = await toPng(svgElement, {
-        backgroundColor: '#16181d', // mismo fondo que el contenedor
-        pixelRatio: 2,              // mayor resolución
-        cacheBust: true,            // evita cache
+        backgroundColor: '#16181d',
+        pixelRatio: 2,
+        cacheBust: true,
       });
-
       const link = document.createElement('a');
       link.download = `circuito_${c?.id || 'export'}.png`;
       link.href = dataUrl;
@@ -89,28 +69,34 @@ export function Simulator({ state, dispatch, api }) {
     }
   };
 
-
-
   if (!c) return null;
 
-  // Normalizar campos independientemente del origen (local vs API)
   const norm = normalizar(c, netlist);
 
-  const isActive    = simStatus === 'activo';
-  const diffClass   = getDifficultyClass(norm.difficulty);
-  const voltage     = norm.voltage;
-  const current     = norm.current;
-  const resistance  = norm.resistance;
-  const power       = parseFloat((voltage * current).toFixed(2));
+  const isActive   = simStatus === 'activo';
+  const diffClass  = getDifficultyClass(norm.difficulty);
+  const voltage    = norm.voltage;
+  const current    = norm.current;
+  const resistance = norm.resistance;
+  const power      = parseFloat((voltage * current).toFixed(2));
 
   const isRunningDC = loading?.simulacionDC;
   const isRunningAC = loading?.simulacionAC;
 
+  // ── Determinar botones AC/DC desde el netlist ─────────────────────────────
+  const modoFuentes = netlist
+    .filter((n) => n.type === 'fuente_voltaje' || n.type === 'fuente_corriente')
+    .map((n) => n.params?.dcOrAc?.toLowerCase());
+
+  const mostrarDC = modoFuentes.some((m) => m === 'dc');
+  const mostrarAC = modoFuentes.some((m) => m === 'ac');
+  // ──────────────────────────────────────────────────────────────────────────
+
   const metrics = [
-    { val: voltage    ? `${voltage}V`    : '—', label: 'Voltaje'      },
-    { val: current    ? `${current}A`    : '—', label: 'Corriente'    },
-    { val: resistance ? `${resistance}Ω` : '—', label: 'Resistencia'  },
-    { val: power      ? `${power}W`      : '—', label: 'Potencia'     },
+    { val: voltage    ? `${voltage}V`    : '—', label: 'Voltaje'     },
+    { val: current    ? `${current}A`    : '—', label: 'Corriente'   },
+    { val: resistance ? `${resistance}Ω` : '—', label: 'Resistencia' },
+    { val: power      ? `${power}W`      : '—', label: 'Potencia'    },
   ];
 
   return (
@@ -127,7 +113,6 @@ export function Simulator({ state, dispatch, api }) {
       </nav>
 
       <div className="sim-layout">
-        {/* Panel principal */}
         <div className="sim-main">
 
           {/* Diagrama */}
@@ -145,7 +130,7 @@ export function Simulator({ state, dispatch, api }) {
               <CircuitSVG circuit={c} />
             </div>
 
-            {/* Controles de simulación visual (timer local) */}
+            {/* Controles visuales (timer local) */}
             <div className="sim-controls">
               <button
                 className="control-btn primary"
@@ -166,32 +151,36 @@ export function Simulator({ state, dispatch, api }) {
               </button>
             </div>
 
-            {/* Controles de simulación via API */}
-            {netlist.length > 0 && (
+            {/* Controles de simulación via API — solo botones que corresponden */}
+            {netlist.length > 0 && (mostrarDC || mostrarAC) && (
               <div className="sim-controls" style={{ marginTop: 8 }}>
-                <button
-                  className="control-btn primary"
-                  onClick={() => api.simularDC()}
-                  disabled={isRunningDC}
-                >
-                  {isRunningDC ? '⏳ Simulando…' : '⚡ Simular DC'}
-                </button>
-                <button
-                  className="control-btn"
-                  onClick={() =>
-                    api.simularAC({
-                      configuracion_ac: {
-                        f_inicial: 10,
-                        f_final: 100000,
-                        puntos: 50,
-                        barrido: 'log',
-                      },
-                    })
-                  }
-                  disabled={isRunningAC}
-                >
-                  {isRunningAC ? '⏳ Simulando…' : '∿ Simular AC'}
-                </button>
+                {mostrarDC && (
+                  <button
+                    className="control-btn primary"
+                    onClick={() => api.simularDC()}
+                    disabled={isRunningDC}
+                  >
+                    {isRunningDC ? '⏳ Simulando…' : '⚡ Simular DC'}
+                  </button>
+                )}
+                {mostrarAC && (
+                  <button
+                    className="control-btn"
+                    onClick={() =>
+                      api.simularAC({
+                        configuracion_ac: {
+                          f_inicial: 10,
+                          f_final: 100000,
+                          puntos: 50,
+                          barrido: 'log',
+                        },
+                      })
+                    }
+                    disabled={isRunningAC}
+                  >
+                    {isRunningAC ? '⏳ Simulando…' : '∿ Simular AC'}
+                  </button>
+                )}
               </div>
             )}
 
@@ -292,7 +281,7 @@ export function Simulator({ state, dispatch, api }) {
 
             <div className="tabs-row">
               {[
-                { id: 'calcs',   label: '⊞ Cálculos' },
+                { id: 'calcs',    label: '⊞ Cálculos' },
                 { id: 'graficas', label: '📊 Gráficas' },
               ].map((tab) => (
                 <button
@@ -343,7 +332,6 @@ export function Simulator({ state, dispatch, api }) {
                   </div>
                 </AccordionSection>
 
-                {/* Thévenin / Norton */}
                 {netlist.length > 0 && (
                   <AccordionSection id="thevenin" title="Thévenin / Norton" icon="⊛" state={state} dispatch={dispatch}>
                     <TeoremasPanel
@@ -356,7 +344,6 @@ export function Simulator({ state, dispatch, api }) {
                   </AccordionSection>
                 )}
 
-                {/* Superposición */}
                 {netlist.length > 0 && (
                   <AccordionSection id="superposicion" title="Superposición" icon="∑" state={state} dispatch={dispatch}>
                     <TeoremasPanel
