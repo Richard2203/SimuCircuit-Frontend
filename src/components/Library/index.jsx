@@ -6,34 +6,178 @@ import { CircuitCard } from '../CircuitCard';
 const MAX_VISIBLE = 32;
 
 /**
+ * Normaliza un string: minusculas + sin tildes/diacriticos.
+ * Permite comparar "Básico" === "Basico", "Fácil" === "Facil", etc.
+ */
+function normalize(str) {
+  return (str ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Mapeo de categorías de la BD → etiquetas de checkbox del frontend.
+ * Se compara con normalize() para ignorar tildes y mayúsculas.
+ * Cada entrada es [fragmento_en_categoria, etiqueta_checkbox].
+ * Se usa "includes" sobre la categoría normalizada, así "diodos: rectificadores"
+ * hace match con la regla "diodos: rectificador".
+ */
+const CATEGORIA_RULES = [
+  ['diodos: rectificador',   'Diodo rectificador'],
+  ['diodos: led',            'Diodo LED'],
+  ['diodos: recortador',     'Diodo zener'],
+  ['diodos: sujetador',      'Diodo zener'],
+  ['diodo zener',            'Diodo zener'],
+  ['transistor bjt',         'Transistor BJT'],
+  ['transistor fet',         'Transistor FET'],
+  ['filtros pasivos',        'Resistencias'],   // RC/RL/RLC siempre tienen resistencias
+  ['corriente alterna',      'Resistencias'],   // todos los AC tienen al menos R
+  ['rlc',                    'Capacitores'],
+  ['rlc',                    'Bobinas'],
+  ['regulador lm317',        'Regulador LM317'],
+  ['regulador lm7805',       'Regulador LM7805'],
+];
+
+/**
+ * Palabras clave en el NOMBRE del circuito → etiquetas de checkbox.
+ * Cubre casos donde la categoría no es suficiente.
+ */
+const NOMBRE_RULES = [
+  ['resistiv',    'Resistencias'],
+  [' rc ',        'Resistencias'],
+  [' rc ',        'Capacitores'],
+  [' rl ',        'Resistencias'],
+  [' rl ',        'Bobinas'],
+  ['rlc',         'Resistencias'],
+  ['rlc',         'Capacitores'],
+  ['rlc',         'Bobinas'],
+  ['capacitor',   'Capacitores'],
+  ['bobina',      'Bobinas'],
+  ['inductor',    'Bobinas'],
+  ['zener',       'Diodo zener'],
+  [' led',        'Diodo LED'],
+  ['rectificador','Diodo rectificador'],
+  ['transistor',  'Transistor BJT'],
+  ['regulador',   'Regulador LM317'],
+];
+
+/**
+ * Extrae las etiquetas de checkbox presentes en un circuito.
+ * Fuentes de datos (en orden de prioridad):
+ *  1. circuit.components        → circuitos locales (ya tienen etiquetas directas)
+ *  2. circuit.tipos_componentes → campo nuevo del backend (si ya esta desplegado)
+ *  3. circuit.categorias        → array disponible en el listado actual de la API
+ *  4. nombre del circuito       → heurística de último recurso
+ */
+function getComponentLabels(circuit) {
+  const labels = new Set();
+
+  // 1. Circuitos locales: ya traen etiquetas directas
+  if (Array.isArray(circuit.components) && circuit.components.length > 0) {
+    return circuit.components;
+  }
+
+  // 2. Campo tipos_componentes del backend (cuando esté disponible)
+  if (Array.isArray(circuit.tipos_componentes) && circuit.tipos_componentes.length > 0) {
+    for (const tipo of circuit.tipos_componentes) {
+      const key = normalize(tipo);
+      for (const [fragment, label] of CATEGORIA_RULES) {
+        if (key.includes(normalize(fragment))) labels.add(label);
+      }
+    }
+    if (labels.size > 0) return [...labels];
+  }
+
+  // 3. Derivar desde categorias (disponible en el listado actual)
+  const categorias = Array.isArray(circuit.categorias) ? circuit.categorias : [];
+  for (const cat of categorias) {
+    const catNorm = normalize(cat);
+    for (const [fragment, label] of CATEGORIA_RULES) {
+      if (catNorm.includes(normalize(fragment))) labels.add(label);
+    }
+  }
+
+  // Los circuitos 1-9 son todos resistivos (aparecen en categorias como Mixto/Serie/Paralelo)
+  // Si tiene al menos una categoría DC o AC y ninguna categoría de diodo/transistor,
+  // casi seguro tiene resistencias.
+  const catStr = categorias.map(normalize).join(' ');
+  if (catStr.includes('corriente') && !catStr.includes('diodo') && !catStr.includes('transistor')) {
+    labels.add('Resistencias');
+  }
+
+  // 4. Heurística por nombre del circuito
+  const nombreNorm = ' ' + normalize(circuit.nombre ?? circuit.name ?? circuit.nombre_circuito ?? '') + ' ';
+  for (const [fragment, label] of NOMBRE_RULES) {
+    if (nombreNorm.includes(normalize(fragment))) labels.add(label);
+  }
+
+  return [...labels];
+}
+
+/**
  * Aplica los filtros activos al dataset de circuitos.
  * Normaliza campos API (dificultad/materia) y locales (difficulty/unit).
+ * La comparación de dificultad ignora tildes y mayúsculas.
+ * El filtro de componentes usa OR: basta con que el circuito
+ * contenga AL MENOS UNO de los componentes seleccionados.
  * @param {Array} circuits
  * @param {object} filters
  * @returns {Array}
  */
 function applyFilters(circuits, filters) {
   return circuits.filter((c) => {
-    const name = c.name ?? c.nombre_circuito ?? c.nombre ?? '';
+    
+    const name       = c.name ?? c.nombre_circuito ?? c.nombre ?? '';
     const difficulty = c.difficulty ?? c.dificultad ?? '';
-    const unit = c.unit ?? c.materia ?? '';
-    const topic = c.topic ?? c.unidad_tematica ?? '';
+    // "materia" en la BD == "unit" en circuitos locales
+    const unit       = c.unit ?? c.materia ?? '';
+    // "unidad_tematica" en la BD == "topic" en circuitos locales
+    const topic      = c.topic ?? c.unidad_tematica ?? '';
+    // "type" en circuitos locales (ej. "Serie"); en circuitos de BD viene
+    // dentro de `categorias` como "Circuito en Serie", "Circuito Mixto...", etc.
+    const categorias = Array.isArray(c.categorias) ? c.categorias : [];
 
-    if (filters.search && !name.toLowerCase().includes(filters.search.toLowerCase()))
+
+    if (filters.search &&
+        !normalize(name).includes(normalize(filters.search)))
       return false;
-    if (filters.difficulty && difficulty !== filters.difficulty)
+
+    // Comparación sin tildes: "Básico" == "Basico"
+    if (filters.difficulty &&
+        normalize(difficulty) !== normalize(filters.difficulty))
       return false;
-    if (filters.unit && unit !== filters.unit)
+
+    if (filters.unit && normalize(unit) !== normalize(filters.unit))
       return false;
-    if (filters.topic && topic !== filters.topic)
+
+    // Tema: comparación normalizada
+    if (filters.topic && normalize(topic) !== normalize(filters.topic))
       return false;
-    if (filters.type && c.type !== filters.type)
-      return false;
-    if (
-      filters.components.length > 0 &&
-      !filters.components.every((comp) => (c.components ?? c.categorias ?? []).includes(comp))
-    )
-      return false;
+
+    // Tipo de circuito: circuitos locales usan c.type; circuitos de BD
+    // tienen el tipo embebido en alguna categoría (ej. "Circuito en Serie")
+    if (filters.type) {
+      const localType = c.type ?? '';
+      const inCategorias = categorias.some((cat) =>
+        normalize(cat).includes(normalize(filters.type))
+      );
+      if (normalize(localType) !== normalize(filters.type) && !inCategorias)
+        return false;
+    }
+
+    // Componentes: OR — el circuito debe tener AL MENOS UNO
+    if (filters.components.length > 0) {
+      console.log('filters.components:', filters.components);
+      const circuitLabels = getComponentLabels(c);
+      const hasAny = filters.components.some((comp) =>
+        circuitLabels.includes(comp)
+      );
+      if (!hasAny) return false;
+    }
+
+    
+
     return true;
   });
 }
@@ -71,7 +215,7 @@ function SkeletonCard() {
 export function Library({ state, dispatch, api }) {
   const { filters, filtrosApi, circuitosApi, loading } = state;
 
-  // Al montar: cargar filtros y circuitos de la API simultáneamente
+  // Al montar: cargar filtros y circuitos de la API simultaneamente
   useEffect(() => {
     api.cargarFiltros();
     api.buscarCircuitos();
@@ -116,7 +260,6 @@ export function Library({ state, dispatch, api }) {
             filters={filters}
             filtrosApi={filtrosApi}
             dispatch={dispatch}
-            onBuscar={(params) => api.buscarCircuitos(params)}
           />
 
           {/* Conteo de resultados */}
@@ -192,7 +335,6 @@ export function Library({ state, dispatch, api }) {
               <p>No se encontraron circuitos con los filtros actuales.</p>
               <button className="control-btn" onClick={() => {
                 dispatch('CLEAR_FILTERS');
-                api.buscarCircuitos();
               }}>
                 Limpiar filtros
               </button>

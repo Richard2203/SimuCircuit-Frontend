@@ -1,88 +1,71 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import {
   DIFFICULTIES, UNITS, TOPICS_BY_UNIT, CIRCUIT_TYPES, COMPONENTS_LIST,
 } from '../../data/circuits';
 
-const INITIAL_LOCAL = {
-  search: '', difficulty: '', unit: '', topic: '', type: '', components: [],
-};
-
 /**
- * FilterPanel — Panel de filtros de la biblioteca.
- *
- * Prioriza las opciones dinámicas de la API (filtrosApi) sobre las
- * constantes locales, para que el panel refleje los datos reales del backend.
+ * FilterPanel — Panel de filtros de la biblioteca - Se aplica en el cliente sin consultar backend
  *
  * @param {{
  *   filters:    object,
  *   filtrosApi: object|null,   // { temas, componentes, dificultades, materias }
  *   dispatch:   Function,
- *   onBuscar:   Function       // llama a api.buscarCircuitos(params)
  * }} props
  */
-export function FilterPanel({ filters, filtrosApi, dispatch, onBuscar }) {
-  const [local, setLocal]         = useState({ ...INITIAL_LOCAL, ...filters });
-  const [localComps, setLocalComps] = useState(filters.components || []);
-
+export function FilterPanel({ filters, filtrosApi, dispatch }) {
   // Opciones: API cuando disponible, fallback a constantes locales
   const dificultades = filtrosApi?.dificultades ?? DIFFICULTIES;
   const materias     = filtrosApi?.materias     ?? UNITS;
-  const componentes  = filtrosApi?.componentes  ?? COMPONENTS_LIST;
+  const componentes  = COMPONENTS_LIST;
 
   // Temas: si la API los tiene como arreglo plano, usarlos directo;
   // si no, caer al mapa local por unidad
   const temasApi = filtrosApi?.temas ?? null;
   const availableTopics = temasApi
     ? temasApi
-    : (local.unit ? TOPICS_BY_UNIT[local.unit] || [] : []);
+    : (filters.unit ? TOPICS_BY_UNIT[filters.unit] || [] : []);
 
-  // Sincronizar estado local si los filtros globales se limpian externamente
+  // Si se cambia la unidad y el tema actual ya no es válido, limpiarlo
   useEffect(() => {
-    if (!filters.search && !filters.difficulty && !filters.unit &&
-        !filters.topic && !filters.type && filters.components.length === 0) {
-      setLocal({ ...INITIAL_LOCAL });
-      setLocalComps([]);
+    if (filters.topic && !temasApi && filters.unit) {
+      const validTopics = TOPICS_BY_UNIT[filters.unit] || [];
+      if (!validTopics.includes(filters.topic)) {
+        dispatch('SET_FILTER', { ...filters, topic: '' });
+      }
     }
-  }, [filters]);
+  }, [filters.unit]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Actualiza un campo de texto o select e inmediatamente despacha el filtro */
   const handleField = (key, value) => {
     const updated = {
-      ...local,
+      ...filters,
       [key]: value,
+      // Al cambiar de unidad, resetear el tema
       ...(key === 'unit' ? { topic: '' } : {}),
     };
-    setLocal(updated);
-    // Búsqueda en tiempo real solo para el campo de texto
-    if (key === 'search') {
-      dispatch('SET_FILTER', { ...updated, components: localComps });
-    }
+    dispatch('SET_FILTER', updated);
   };
 
-  const handleComponent = (comp) =>
-    setLocalComps((prev) =>
-      prev.includes(comp) ? prev.filter((c) => c !== comp) : [...prev, comp]
-    );
-
-  const handleFilter = () => {
-    const params = {
-      nombreBusqueda: local.search,
-      dificultad:     local.difficulty,
-      materia:        local.unit,
-      tema:           local.topic,
-      componentes:    localComps,
-    };
-    // Actualiza el estado global de filtros (para filtrado local)
-    dispatch('SET_FILTER', { ...local, components: localComps });
-    // Llama a la API a través del Mediator
-    onBuscar?.(params);
+  /** Alterna un componente del checkbox e inmediatamente despacha el filtro */
+  const handleComponent = (comp) => {
+    const current = filters.components ?? [];
+    const updated = current.includes(comp)
+      ? current.filter((c) => c !== comp)
+      : [...current, comp];
+    dispatch('SET_FILTER', { ...filters, components: updated });
   };
 
   const handleClear = () => {
-    setLocal({ ...INITIAL_LOCAL });
-    setLocalComps([]);
     dispatch('CLEAR_FILTERS');
-    onBuscar?.({});
   };
+
+  const hasActiveFilters =
+    filters.search ||
+    filters.difficulty ||
+    filters.unit ||
+    filters.topic ||
+    filters.type ||
+    (filters.components ?? []).length > 0;
 
   return (
     <div className="filter-panel">
@@ -92,7 +75,7 @@ export function FilterPanel({ filters, filtrosApi, dispatch, onBuscar }) {
         <input
           className="filter-input"
           placeholder="Buscar circuito..."
-          value={local.search}
+          value={filters.search}
           onChange={(e) => handleField('search', e.target.value)}
         />
       </div>
@@ -106,7 +89,7 @@ export function FilterPanel({ filters, filtrosApi, dispatch, onBuscar }) {
             label: 'Tema',
             key: 'topic',
             opts: availableTopics,
-            disabled: !temasApi && !local.unit,
+            disabled: !temasApi && !filters.unit,
           },
           { label: 'Tipo de circuito',      key: 'type',       opts: CIRCUIT_TYPES },
         ].map((f) => (
@@ -114,7 +97,7 @@ export function FilterPanel({ filters, filtrosApi, dispatch, onBuscar }) {
             <label className="filter-label">{f.label}</label>
             <select
               className="filter-select"
-              value={local[f.key]}
+              value={filters[f.key]}
               disabled={f.disabled}
               onChange={(e) => handleField(f.key, e.target.value)}
             >
@@ -133,7 +116,7 @@ export function FilterPanel({ filters, filtrosApi, dispatch, onBuscar }) {
             <label key={comp} className="checkbox-item">
               <input
                 type="checkbox"
-                checked={localComps.includes(comp)}
+                checked={(filters.components ?? []).includes(comp)}
                 onChange={() => handleComponent(comp)}
               />
               <span>{comp}</span>
@@ -142,12 +125,13 @@ export function FilterPanel({ filters, filtrosApi, dispatch, onBuscar }) {
         </div>
       </div>
 
-      {/* Acciones */}
+      {/* Acciones — solo limpiar, el filtrado es instantáneo */}
       <div className="filter-actions">
-        <button className="control-btn primary" onClick={handleFilter}>
-          ⚡ Filtrar
-        </button>
-        <button className="control-btn" onClick={handleClear}>
+        <button
+          className="control-btn"
+          onClick={handleClear}
+          disabled={!hasActiveFilters}
+        >
           Limpiar filtros
         </button>
       </div>
