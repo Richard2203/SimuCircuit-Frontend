@@ -174,6 +174,7 @@ function getPins(comp) {
   }
 
   if (t === 'diodo') {
+    
     // DiodoRectificador: ánodo a la izquierda, cátodo a la derecha.
     //   pinA local = (-85*scale, 0), pinB local = (+85*scale, 0)
     const arm = 85 * s;
@@ -188,15 +189,28 @@ function getPins(comp) {
   }
 
   
-  if (t === 'diodo_led') {
-    // Led: ánodo a la izquierda, cátodo a la derecha.
-    //   pinA local = (-85*scale, 0), pinB local = (+85*scale, 0)
+  if (t === 'diodo') {
+    const esLED = (comp.params?.tipo || '').toLowerCase().startsWith('led');
+    if (esLED) {
+      // LED vertical: pines salen hacia abajo según led.jsx
+      //   pinA (ánodo):  x - 15*s, y + 95*s
+      //   pinB (cátodo): x + 18*s, y + 95*s
+      const a = { x: cx - 15 * s, y: cy + 95 * s };
+      const b = { x: cx + 18 * s, y: cy + 95 * s };
+      return {
+        n1: a, n2: b,
+        a, b,
+        'pin 1': a, 'pin 2': b, pin1: a, pin2: b,
+        anodo: a, anode: a, catodo: b, cathode: b,
+      };
+    }
+    // Rectificador / Zener / Señal / Schottky: pines horizontales ±85*s
     const arm = 85 * s;
     const a = rotPt(cx, cy, -arm, 0, rot);
     const b = rotPt(cx, cy,  arm, 0, rot);
     return {
       n1: a, n2: b,
-      a: a, b: b,
+      a, b,
       'pin 1': a, 'pin 2': b, pin1: a, pin2: b,
       anodo: a, anode: a, catodo: b, cathode: b,
     };
@@ -335,9 +349,11 @@ function getComponentBBox(comp) {
   if (t === 'fuente_corriente') {
     return rotatedBBox(25 * SCALE_DEFAULT, 25 * SCALE_DEFAULT);
   }
-  if (t === 'diodo') {
-    // Cuerpo del diodo: rect ±60 en x (sin pines), ±25 en y, scale 0.38
+  if (t === 'diodo' || t === 'diodo_zener') {
     return rotatedBBox(60 * SCALE_DEFAULT, 25 * SCALE_DEFAULT);
+  }
+  if (t === 'diodo_led') {
+    return rotatedBBox(30 * SCALE_DEFAULT, 50 * SCALE_DEFAULT);
   }
   // Transistores: bbox conservador
   return rotatedBBox(20 * SCALE_DEFAULT, 20 * SCALE_DEFAULT);
@@ -757,20 +773,23 @@ function renderComponent(comp) {
         <Bobina key={comp.id} x={x} y={y} scale={SCALE_DEFAULT} rotation={rotation}
           componentId={comp.id} initialValue={valueNum} />
       );
-    case 'diodo':
+    case 'diodo': {
+      const esLED = (comp.params?.tipo || '').toLowerCase().startsWith('led');
+      if (esLED) {
+        return (
+          <g key={comp.id} transform={wrapRotation}>
+            <LED x={x} y={y} scale={SCALE_DEFAULT} orientation="vertical"
+              componentId={comp.id} initialValue={valueNum} />
+          </g>
+        );
+      }
       return (
         <g key={comp.id} transform={wrapRotation}>
           <DiodoRectificador x={x} y={y} scale={SCALE_DEFAULT} orientation={orientation}
             componentId={comp.id} initialValue={valueNum} />
         </g>
       );
-    case 'diodo_led':
-      return (
-        <g key={comp.id} transform={wrapRotation}>
-          <LED x={x} y={y} scale={SCALE_DEFAULT} orientation={orientation}
-            componentId={comp.id} initialValue={valueNum} />
-        </g>
-      );
+    }
     case 'transistor_bjt':
     case 'transistor_fet':
       return (
