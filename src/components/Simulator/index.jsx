@@ -1,3 +1,5 @@
+import { toPng } from 'html-to-image';
+import { useRef } from 'react';
 import { CircuitSVG }        from '../../utils/circuitSVG';
 import { getDifficultyClass } from '../../utils/difficulty';
 import { useSimTime }         from '../../hooks/useSimTime';
@@ -55,8 +57,39 @@ export function Simulator({ state, dispatch, api }) {
     netlist,
     teoremaResultado,
   } = state;
-
+  
+  const svgContainerRef = useRef(null);
   const simTime = useSimTime();
+
+
+  const exportToPNG = async () => {
+    if (!svgContainerRef.current) return;
+
+    // Busca el SVG dentro del contenedor
+    const svgElement = svgContainerRef.current.querySelector('svg');
+    if (!svgElement) {
+      console.warn('No se encontró el SVG para exportar');
+      return;
+    }
+
+    try {
+      // Configura opciones para mantener el fondo y escala
+      const dataUrl = await toPng(svgElement, {
+        backgroundColor: '#16181d', // mismo fondo que el contenedor
+        pixelRatio: 2,              // mayor resolución
+        cacheBust: true,            // evita cache
+      });
+
+      const link = document.createElement('a');
+      link.download = `circuito_${c?.id || 'export'}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error('Error al generar PNG:', error);
+    }
+  };
+
+
 
   if (!c) return null;
 
@@ -107,8 +140,8 @@ export function Simulator({ state, dispatch, api }) {
               )}
             </div>
 
-            <div className="circuit-svg-wrap">
-              <button className="export-btn">↓ Exportar PNG</button>
+            <div className="circuit-svg-wrap" ref={svgContainerRef}>
+              <button className="export-btn" onClick={exportToPNG}>↓ Exportar PNG</button>
               <CircuitSVG circuit={c} />
             </div>
 
