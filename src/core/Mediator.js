@@ -1,8 +1,8 @@
 import eventBus from './EventBus';
-import { CircuitosService }   from '../services/CircuitosService';
-import { ComponentesService } from '../services/ComponentesService';
-import { SimulacionService }  from '../services/SimulacionService';
-import { TeoremasService }    from '../services/TeoremasService';
+import { CircuitosService }   from '../services/simulator/CircuitosService';
+import { ComponentesService } from '../services/simulator/ComponentesService';
+import { SimulacionService }  from '../services/simulator/SimulacionService';
+import { TeoremasService }    from '../services/simulator/TeoremasService';
 
 /**
  * SimuCircuitMediator — Pattern: Mediator

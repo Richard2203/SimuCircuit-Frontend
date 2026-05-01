@@ -3,10 +3,17 @@
  *
  * Uso:
  *   import { CircuitosService, SimulacionService } from '../services';
+ *   import { authService, circuitosAdminService }  from '../services';
  */
 
-export { apiClient, ApiError } from './apiClient';
-export { CircuitosService }   from './CircuitosService';
-export { ComponentesService } from './ComponentesService';
-export { SimulacionService }  from './SimulacionService';
-export { TeoremasService }    from './TeoremasService';
+// ── Servicios del simulador ───────────────────────────────────────
+export { apiClient, ApiError } from './simulator/apiClient';
+export { CircuitosService }    from './simulator/CircuitosService';
+export { ComponentesService }  from './simulator/ComponentesService';
+export { SimulacionService }   from './simulator/SimulacionService';
+export { TeoremasService }     from './simulator/TeoremasService';
+
+// ── Servicios del panel de administrador ─────────────────────────
+export { authService }           from './admin/authService';
+export { circuitosAdminService } from './admin/circuitosAdminService';
+export { adminsService }         from './admin/adminsService';
