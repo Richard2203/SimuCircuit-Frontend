@@ -3,40 +3,7 @@ import { useState } from 'react';
 import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js';
 import { ComponentValueLabel, parseNotation } from './ComponentValueLabel.jsx';
 import { useComponentValue } from '../../../hooks/useComponentValue.js';
-
-const colorCodeMap = {
-  black:  { color: '#000000' }, brown:  { color: '#8B4513' },
-  red:    { color: '#FF0000' }, orange: { color: '#FFA500' },
-  yellow: { color: '#FFFF00' }, green:  { color: '#008000' },
-  blue:   { color: '#0000FF' }, violet: { color: '#EE82EE' },
-  grey:   { color: '#808080' }, white:  { color: '#FFFFFF' },
-  gold:   { color: '#CFB53B' }, silver: { color: '#C0C0C0' },
-};
-
-
-const BAND_COLORS = [
-  'black', 'brown', 'red', 'orange', 'yellow',
-  'green', 'blue',  'violet', 'grey',  'white'
-]
-
-function ohmsToBands(ohms) {
-  if (!ohms || ohms <= 0) return ['black', 'black', 'black', 'gold']
-
-  // Normalizar a dos dígitos significativos
-  const exp   = Math.floor(Math.log10(ohms)) - 1
-  const base  = Math.round(ohms / Math.pow(10, exp))
-
-  const digit1     = Math.floor(base / 10) % 10
-  const digit2     = base % 10
-  const multiplier = exp  // potencia de 10
-
-  return [
-    BAND_COLORS[digit1],
-    BAND_COLORS[digit2],
-    multiplier >= 0 ? BAND_COLORS[multiplier] : 'silver',
-    'gold'   // tolerancia fija ±5%
-  ]
-}
+import { colorCodeMap, ohmsToBands } from './resistorColorCodes.js';
 
 const getSVGColor = (c) => colorCodeMap[c?.toLowerCase()]?.color || c || 'transparent';
 
@@ -76,7 +43,7 @@ export const Resistor = ({
     C -40,25 -60,28 -60,0 Z
   `;
 
-  // Label position — below the body, counter-rotated to stay readable
+  // POsicion del label
   const labelX = 0;
   const labelY = 52;
   const labelRotate = -rotate;

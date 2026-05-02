@@ -1,75 +1,128 @@
 /**
- * adminsService — Dominio: gestión de administradores
+ * adminsService — Gestion de cuentas de administrador.
  *
- * NOTA: Todas las funciones retornan datos mock temporalmente.
- * Cuando el backend esté disponible, reemplazar el cuerpo de cada
- * función sin tocar nada más del proyecto.
+ * Endpoints esperados (cuando se implementen):
+ *   GET    /api/admin/admins
+ *   POST   /api/admin/admins                  { correo, contrasena }
+ *   PUT    /api/admin/admins/:id              { correo }
+ *   DELETE /api/admin/admins/:id
+ *   POST   /api/admin/admins/:id/contrasena   { contrasena_actual, nueva_contrasena }
  */
 
-import { apiClient } from '../simulator/apiClient';
+import { _mockAuthInternals } from './authService';
 
-/** Mock de administradores */
-let MOCK_ADMINS = [
-  { id: 1, correo: 'admin@simu.mx' },
-];
+const STORAGE_KEY = 'admin_mock_admins';
 
-/**
- * Obtiene la lista de todos los administradores.
- * @returns {Promise<Array<{ id: number, correo: string }>>}
- */
-async function obtenerAdmins() {
-  // TODO: conectar con backend
-  // return apiClient.get('/api/admin/admins');
-  return [...MOCK_ADMINS];
+/* ── Estado persistente en localStorage ──────────────────────── */
+function readAdmins() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  // Estado inicial: un solo admin para poder iniciar sesión
+  return [{ id: 1, correo: 'admin@simu.mx' }];
 }
 
-/**
- * Agrega un nuevo administrador al sistema.
- * @param {{ correo: string, contrasena: string }} payload
- * @returns {Promise<{ id: number, correo: string } | null>}
- */
+function writeAdmins(list) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+  catch { /* ignore */ }
+}
+
+function nextId(list) {
+  const max = list.reduce((m, a) => Math.max(m, a.id ?? 0), 0);
+  return max + 1;
+}
+
+/* ── API ─────────────────────────────────────────────────────── */
+
+async function obtenerAdmins() {
+  await new Promise((r) => setTimeout(r, 150));
+  return readAdmins();
+}
+
 async function agregarAdmin({ correo, contrasena }) {
-  // TODO: conectar con backend
-  // return apiClient.post('/api/admin/admins', { correo, contrasena });
-  const nuevo = { id: Date.now(), correo };
-  MOCK_ADMINS.push(nuevo);
+  await new Promise((r) => setTimeout(r, 200));
+  if (!correo || !contrasena) {
+    throw Object.assign(new Error('Faltan correo o contraseña.'), { status: 400 });
+  }
+
+  const list = readAdmins();
+  if (list.some((a) => a.correo.toLowerCase() === correo.toLowerCase())) {
+    throw Object.assign(new Error('Ya existe un admin con ese correo.'), { status: 409 });
+  }
+  if (list.length >= 2) {
+    throw Object.assign(new Error('Solo se permiten 2 administradores.'), { status: 422 });
+  }
+
+  const nuevo = { id: nextId(list), correo };
+  list.push(nuevo);
+  writeAdmins(list);
+
+  // Registrar la contraseña en el mock de auth
+  const creds = _mockAuthInternals.getCreds();
+  creds[correo] = contrasena;
+  _mockAuthInternals.setCreds(creds);
+
   return nuevo;
 }
 
-/**
- * Edita el correo de un administrador existente.
- * @param {{ id: number, correo: string }} payload
- * @returns {Promise<{ mensaje: string } | null>}
- */
 async function editarCorreoAdmin({ id, correo }) {
-  // TODO: conectar con backend
-  // return apiClient.post(`/api/admin/admins/${id}/correo`, { correo });
-  MOCK_ADMINS = MOCK_ADMINS.map((a) => (a.id === id ? { ...a, correo } : a));
+  await new Promise((r) => setTimeout(r, 150));
+  const list = readAdmins();
+  const idx  = list.findIndex((a) => a.id === id);
+  if (idx === -1) {
+    throw Object.assign(new Error('Administrador no encontrado.'), { status: 404 });
+  }
+  if (list.some((a) => a.id !== id && a.correo.toLowerCase() === correo.toLowerCase())) {
+    throw Object.assign(new Error('Otro admin ya usa ese correo.'), { status: 409 });
+  }
+
+  // Mover la contraseña a la nueva clave de correo
+  const correoAnterior = list[idx].correo;
+  const creds = _mockAuthInternals.getCreds();
+  if (creds[correoAnterior]) {
+    creds[correo] = creds[correoAnterior];
+    delete creds[correoAnterior];
+    _mockAuthInternals.setCreds(creds);
+  }
+
+  list[idx] = { ...list[idx], correo };
+  writeAdmins(list);
   return { mensaje: 'Correo actualizado correctamente.' };
 }
 
-/**
- * Elimina un administrador por ID.
- * Un admin no puede eliminarse a sí mismo (validar en frontend antes de llamar).
- * @param {{ id: number }} payload
- * @returns {Promise<{ mensaje: string } | null>}
- */
 async function eliminarAdmin({ id }) {
-  // TODO: conectar con backend
-  // return apiClient.post(`/api/admin/admins/${id}/eliminar`, {});
-  MOCK_ADMINS = MOCK_ADMINS.filter((a) => a.id !== id);
+  await new Promise((r) => setTimeout(r, 150));
+  const list = readAdmins();
+  const target = list.find((a) => a.id === id);
+  if (!target) {
+    throw Object.assign(new Error('Administrador no encontrado.'), { status: 404 });
+  }
+
+  // Limpiar tambien su contraseña
+  const creds = _mockAuthInternals.getCreds();
+  delete creds[target.correo];
+  _mockAuthInternals.setCreds(creds);
+
+  writeAdmins(list.filter((a) => a.id !== id));
   return { mensaje: 'Administrador eliminado correctamente.' };
 }
 
-/**
- * Cambia la contraseña del administrador autenticado.
- * @param {{ id: number, contrasena_actual: string, nueva_contrasena: string }} payload
- * @returns {Promise<{ mensaje: string } | null>}
- */
 async function cambiarContrasena({ id, contrasena_actual, nueva_contrasena }) {
-  // TODO: conectar con backend
-  // return apiClient.post(`/api/admin/admins/${id}/contrasena`, { contrasena_actual, nueva_contrasena });
-  console.log('[mock] Cambiando contraseña para admin:', id);
+  await new Promise((r) => setTimeout(r, 200));
+  const list = readAdmins();
+  const admin = list.find((a) => a.id === id);
+  if (!admin) {
+    throw Object.assign(new Error('Administrador no encontrado.'), { status: 404 });
+  }
+
+  const creds = _mockAuthInternals.getCreds();
+  if (creds[admin.correo] !== contrasena_actual) {
+    throw Object.assign(new Error('La contraseña actual no es correcta.'), { status: 401 });
+  }
+
+  creds[admin.correo] = nueva_contrasena;
+  _mockAuthInternals.setCreds(creds);
   return { mensaje: 'Contraseña actualizada correctamente.' };
 }
 

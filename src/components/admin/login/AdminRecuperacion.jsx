@@ -1,12 +1,12 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { authService } from '../../../services/admin/authService';
 
 /**
- * AdminRecuperacion — Formulario de recuperacion de contraseña
- *
- * @param {{ onVolver: () => void }} props
+ * AdminRecuperacion — Formulario de recuperacion de contraseña.
+ * Ruta: /admin/recuperacion
  */
-export function AdminRecuperacion({ onVolver }) {
+export function AdminRecuperacion() {
   const [correo,  setCorreo]  = useState('');
   const [enviado, setEnviado] = useState(false);
   const [error,   setError]   = useState('');
@@ -27,21 +27,21 @@ export function AdminRecuperacion({ onVolver }) {
   }
 
   return (
-    <div style={page}>
-      <div style={card}>
-        <button onClick={onVolver} style={backBtn}>
+    <div className="admin-auth-page">
+      <div className="admin-auth-card">
+        <Link to="/admin/login" className="admin-auth-back-btn">
           ← Volver al login
-        </button>
+        </Link>
 
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h2 style={titleSt}>Recuperar contraseña</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+        <div className="admin-auth-card__heading-wrap">
+          <h2 className="admin-auth-card__heading">Recuperar contraseña</h2>
+          <p className="admin-auth-card__subtitle">
             Ingresa tu correo y recibirás un enlace de restablecimiento.
           </p>
         </div>
 
         {enviado ? (
-          <div style={successBox}>
+          <div className="admin-auth-success-box">
             <span style={{ fontSize: 22 }}>✉️</span>
             <p style={{ fontSize: 14, color: 'var(--success)', fontWeight: 600 }}>¡Listo!</p>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
@@ -51,27 +51,28 @@ export function AdminRecuperacion({ onVolver }) {
             <p style={{ fontSize: 12, color: 'var(--text-hint)', marginTop: 6 }}>
               El enlace expira en 30 minutos. Revisa también tu carpeta de spam.
             </p>
-            <button onClick={onVolver} style={btnSt}>Volver al login</button>
+            <Link to="/admin/login" className="admin-btn admin-btn--primary admin-btn--block" style={{ textAlign: 'center', textDecoration: 'none' }}>
+              Volver al login
+            </Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 16 }}>
-              <label style={labelSt}>Correo electrónico</label>
+              <label className="admin-form-label">Correo electrónico</label>
               <input
-                type="email"
-                value={correo}
-                onChange={(e) => setCorreo(e.target.value)}
-                required
-                placeholder="admin@ejemplo.mx"
-                style={inputSt}
+                type="email" className="admin-input"
+                value={correo} onChange={(e) => setCorreo(e.target.value)}
+                required placeholder="admin@ejemplo.mx"
               />
             </div>
 
-            {error && (
-              <p style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 12 }}>{error}</p>
-            )}
+            {error && <p className="admin-error-msg" style={{ marginBottom: 12 }}>{error}</p>}
 
-            <button type="submit" disabled={loading} style={{ ...btnSt, opacity: loading ? 0.6 : 1 }}>
+            <button
+              type="submit"
+              className="admin-btn admin-btn--primary admin-btn--block"
+              disabled={loading}
+            >
               {loading ? 'Enviando…' : 'Enviar enlace de recuperación'}
             </button>
           </form>
@@ -80,12 +81,3 @@ export function AdminRecuperacion({ onVolver }) {
     </div>
   );
 }
-
-const page      = { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'var(--bg)' };
-const card      = { width: '100%', maxWidth: 400, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-xl)', padding: '36px 32px' };
-const titleSt   = { fontSize: 20, fontWeight: 700, color: 'var(--text)', margin: 0 };
-const labelSt   = { display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 5, fontWeight: 500 };
-const inputSt   = { width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', color: 'var(--text)', fontSize: 13, outline: 'none' };
-const btnSt     = { width: '100%', padding: '11px 0', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-md)', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 10 };
-const backBtn   = { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer', marginBottom: 16, padding: 0 };
-const successBox = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: 20, background: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 'var(--r-md)' };

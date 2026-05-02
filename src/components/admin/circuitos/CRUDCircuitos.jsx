@@ -1,121 +1,128 @@
 import { useState, useEffect } from 'react';
-import { circuitosAdminService } from '../../../services/admin/circuitosAdminService';
 import { FormularioCircuito }    from './FormularioCircuito';
 import { PanelListaCircuitos }   from './PanelListaCircuitos';
+import { ModalConfirmacion }     from '../shared/ModalConfirmacion';
+import { circuitosAdminService } from '../../../services/admin/circuitosAdminService';
 
 /**
- * CRUDCircuitos — Pestaña 2 del panel: gestion completa de circuitos.
- * Orquesta: FormularioCircuito, PanelListaCircuitos, modales.
+ * CRUDCircuitos — Pestaña 2 del panel admin: alta/edicion de circuitos.
+ *
+ * Layout:
+ *   • Barra de acciones: [+ Nuevo]  [≡ Ver listado]   [badge modo edición]
+ *   • Por debajo: <FormularioCircuito> (modo crear o editar)
+ *   • Panel lateral deslizable con la lista existente
  */
 export function CRUDCircuitos() {
-  const [circuitos,  setCircuitos]  = useState([]);
-  const [panelAbierto, setPanelAbierto] = useState(false);
-  const [modoForm,   setModoForm]   = useState('crear'); // 'crear' | 'editar'
-  const [editCircuito, setEditCircuito] = useState(null);
-  const [editNetlist,  setEditNetlist]  = useState([]);
-  const [cargandoEdit, setCargandoEdit] = useState(false);
+  const [circuitos,        setCircuitos]    = useState([]);
+  const [loadingLista,     setLoadingLista] = useState(false);
+  const [panelAbierto,     setPanelAbierto] = useState(false);
+  const [modo,             setModo]         = useState('crear');     // 'crear' | 'editar'
+  const [circuitoEditando, setCircuitoEditando] = useState(null);
+  const [netlistEditando,  setNetlistEditando]  = useState([]);
+  const [modalEliminar,    setModalEliminar]    = useState(null);
 
-  useEffect(() => { cargarCircuitos(); }, []);
+  // Trigger para forzar el remount del formulario (limpiar estado interno)
+  const [formKey, setFormKey] = useState(0);
 
-  async function cargarCircuitos() {
+  useEffect(() => { cargarLista(); }, []);
+
+  async function cargarLista() {
+    setLoadingLista(true);
     try {
       const data = await circuitosAdminService.obtenerCircuitos();
       setCircuitos(data);
-    } catch (e) {
-      console.error('Error cargando circuitos:', e);
+    } catch { setCircuitos([]); }
+    finally { setLoadingLista(false); }
+  }
+
+  function handleNuevo() {
+    setModo('crear');
+    setCircuitoEditando(null);
+    setNetlistEditando([]);
+    setPanelAbierto(false);
+    setFormKey((k) => k + 1);
+  }
+
+  async function handleEditar(circuito) {
+    try {
+      const detalle = await circuitosAdminService.obtenerCircuitoPorId(circuito.id);
+      setModo('editar');
+      setCircuitoEditando(detalle.circuito ?? circuito);
+      setNetlistEditando(detalle.netlist ?? []);
+      setPanelAbierto(false);
+      setFormKey((k) => k + 1);
+    } catch {
+      alert('No se pudo cargar el circuito.');
     }
   }
 
   async function handleEliminar(circuito) {
     try {
       await circuitosAdminService.eliminarCircuito({ id: circuito.id });
-      cargarCircuitos();
-    } catch {
-      alert('Error al eliminar el circuito.');
-    }
-  }
-
-  async function handleSeleccionarEditar(circuito) {
-    setCargandoEdit(true);
-    try {
-      const detalle = await circuitosAdminService.obtenerCircuitoPorId({ id: circuito.id });
-      setEditCircuito(detalle?.circuito ?? circuito);
-      setEditNetlist(detalle?.netlist  ?? []);
-      setModoForm('editar');
-    } catch {
-      setEditCircuito(circuito);
-      setEditNetlist([]);
-      setModoForm('editar');
-    } finally {
-      setCargandoEdit(false);
-    }
-  }
-
-  function handleNuevoCircuito() {
-    setEditCircuito(null);
-    setEditNetlist([]);
-    setModoForm('crear');
+      setModalEliminar(null);
+      if (modo === 'editar' && circuitoEditando?.id === circuito.id) {
+        handleNuevo();
+      }
+      cargarLista();
+    } catch { alert('Error al eliminar.'); }
   }
 
   function handleGuardado() {
-    cargarCircuitos();
-    // Permanecer en el formulario para confirmacion visual
+    cargarLista();
   }
 
   return (
-    <div style={container}>
+    <div className="admin-crud-container">
 
-      {/* ── Barra de acciones ── */}
-      <div style={actionBar}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button onClick={handleNuevoCircuito} style={btnPrimary}>
-            + Nuevo circuito
+      {/* Barra de acciones superior */}
+      <div className="admin-crud-actionbar">
+        <div className="admin-crud-actionbar__group">
+          <button className="admin-btn admin-btn--primary admin-btn--sm" onClick={handleNuevo}>
+            + Nuevo
           </button>
-          <button onClick={() => setPanelAbierto(true)} style={btnSecondary}>
+          <button className="admin-btn admin-btn--secondary admin-btn--sm" onClick={() => setPanelAbierto(true)}>
             ≡ Ver listado ({circuitos.length})
           </button>
         </div>
 
-        {cargandoEdit && (
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando datos del circuito…</span>
-        )}
+        <div className={`admin-mode-badge`}>
+          <span className={`admin-mode-badge__dot ${modo === 'editar' ? 'admin-mode-badge__dot--editing' : ''}`} />
+          {modo === 'editar'
+            ? <>Editando: <strong style={{ color: 'var(--text)', marginLeft: 4 }}>{circuitoEditando?.nombre_circuito}</strong></>
+            : 'Modo: Nuevo circuito'
+          }
+        </div>
       </div>
 
-      {/* ── Indicador de modo ── */}
-      <div style={modoBadge}>
-        <span style={modoDot(modoForm)} />
-        {modoForm === 'crear' ? 'Modo: Nuevo circuito' : `Modo: Editando — ${editCircuito?.nombre_circuito ?? editCircuito?.nombre ?? '…'}`}
-      </div>
-
-      {/* ── Formulario principal ── */}
+      {/* Formulario activo */}
       <FormularioCircuito
-        key={modoForm === 'editar' ? (editCircuito?.id ?? 'edit') : 'nuevo'}
-        modo={modoForm}
-        circuitoInicial={editCircuito}
-        netlistInicial={editNetlist}
+        key={formKey}
+        modo={modo}
+        circuitoInicial={circuitoEditando}
+        netlistInicial={netlistEditando}
         onGuardar={handleGuardado}
-        onCancelar={() => { setModoForm('crear'); setEditCircuito(null); setEditNetlist([]); }}
+        onCancelar={handleNuevo}
       />
 
-      {/* ── Panel lateral de lista ── */}
+      {/* Panel lateral con lista existente */}
       <PanelListaCircuitos
         abierto={panelAbierto}
         circuitos={circuitos}
+        loading={loadingLista}
         onCerrar={() => setPanelAbierto(false)}
-        onEditar={handleSeleccionarEditar}
-        onEliminar={handleEliminar}
+        onEditar={handleEditar}
+        onEliminar={(c) => setModalEliminar(c)}
+      />
+
+      {/* Confirmacion de eliminacion */}
+      <ModalConfirmacion
+        abierto={!!modalEliminar}
+        titulo="Eliminar circuito"
+        mensaje={`¿Eliminar el circuito "${modalEliminar?.nombre_circuito}"? Esta acción no se puede deshacer.`}
+        labelConfirmar="Eliminar"
+        onConfirmar={() => handleEliminar(modalEliminar)}
+        onCancelar={() => setModalEliminar(null)}
       />
     </div>
   );
 }
-
-const container  = { display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, flex: 1 };
-const actionBar  = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '4px 0', flexWrap: 'wrap' };
-const btnPrimary  = { padding: '9px 18px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--r-md)', fontSize: 13, fontWeight: 600, cursor: 'pointer' };
-const btnSecondary= { padding: '9px 18px', background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', fontSize: 13, cursor: 'pointer' };
-const modeBadge  = { fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', alignSelf: 'flex-start' };
-const modoBadge  = modeBadge;
-const modoDot    = (modo) => ({
-  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-  background: modo === 'crear' ? 'var(--success)' : 'var(--warning)',
-});

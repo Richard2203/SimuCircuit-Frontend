@@ -1,13 +1,19 @@
 /**
+ * Etiqueta corta y compacta del nombre del pin (para mostrarla junto al nodo).
+ */
+const PIN_ABBR = {
+  a: 'A', b: 'B', w: 'W',
+  anodo: 'A', catodo: 'K',
+  base: 'B', colector: 'C', emisor: 'E',
+  gate: 'G', drain: 'D', source: 'S',
+  vin: 'IN', vout: 'OUT', ref: 'REF',
+};
+
+/**
  * FilaComponente — Fila individual de un componente en la lista de la netlist.
- * Muestra: ícono SVG del tipo, ID, tipo, valor, nodos, botón eliminar.
- *
- * Interacción bidireccional hover con PreviewSVG:
- *  - Hover aquí → onHover(id)
- *  - hoveredId === id → resaltado visual
  *
  * @param {{
- *   comp: { id, type, value, nodo_a, nodo_b },
+ *   comp: { id, type, value, nodos: Record<string,string> },
  *   hoveredId: string|null,
  *   onHover: (id: string|null) => void,
  *   onEliminar: (id: string) => void,
@@ -15,44 +21,33 @@
  */
 export function FilaComponente({ comp, hoveredId, onHover, onEliminar }) {
   const highlighted = hoveredId === comp.id;
+  const pinEntries  = Object.entries(comp.nodos ?? {});
 
   return (
     <div
-      style={{
-        ...rowStyle,
-        background: highlighted ? 'rgba(108,99,255,0.12)' : 'transparent',
-        borderColor: highlighted ? 'rgba(108,99,255,0.4)' : 'var(--border)',
-      }}
+      className={`admin-comp-row ${highlighted ? 'admin-comp-row--hover' : ''}`}
       onMouseEnter={() => onHover(comp.id)}
       onMouseLeave={() => onHover(null)}
     >
-      {/* Icono del tipo */}
-      <div style={iconCell}>
-        <TypeIcon type={comp.type} />
-      </div>
-
-      {/* ID temporal */}
-      <span style={idStyle}>{comp.id}</span>
-
-      {/* Tipo */}
-      <span style={typeStyle}>{labelFor(comp.type)}</span>
-
-      {/* Valor */}
-      <span style={valueStyle}>{comp.value || '—'}</span>
-
-      {/* Nodos */}
-      <span style={nodeStyle}>
-        <NodeBadge>{comp.nodo_a ?? '?'}</NodeBadge>
-        <span style={{ color: 'var(--text-hint)', fontSize: 10 }}>↔</span>
-        <NodeBadge>{comp.nodo_b ?? '?'}</NodeBadge>
+      <div className="admin-comp-row__icon"><TypeIcon type={comp.type} /></div>
+      <span className="admin-comp-row__id">{comp.id}</span>
+      <span className="admin-comp-row__type">{labelFor(comp.type)}</span>
+      <span className="admin-comp-row__value">{comp.value || '—'}</span>
+      <span className="admin-comp-row__nodes">
+        {pinEntries.map(([pinKey, nodo], i) => (
+          <span key={pinKey} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+            {i > 0 && <span className="admin-node-arrow">·</span>}
+            <span className="admin-pin-label">{PIN_ABBR[pinKey] ?? pinKey}</span>
+            <span style={{ fontSize: 9, color: 'var(--text-hint)' }}>=</span>
+            <NodeBadge>{nodo || '?'}</NodeBadge>
+          </span>
+        ))}
       </span>
-
-      {/* Eliminar */}
       <button
         type="button"
+        className="admin-comp-row__del"
         title="Eliminar componente"
         onClick={() => onEliminar(comp.id)}
-        style={delBtn}
       >
         <TrashIcon />
       </button>
@@ -61,19 +56,18 @@ export function FilaComponente({ comp, hoveredId, onHover, onEliminar }) {
 }
 
 /**
- * ListaComponentesAgrupada — Lista de componentes agrupados por nodo compartido.
- *
- * @param {{ componentes, hoveredId, onHover, onEliminar }} props
+ * ListaComponentesAgrupada — Componentes agrupados por nodo compartido.
+ * Para componentes multi-pin, aparecen bajo cada nodo al que se conecten.
  */
 export function ListaComponentesAgrupada({ componentes, hoveredId, onHover, onEliminar }) {
   if (componentes.length === 0) {
     return <p style={{ fontSize: 12, color: 'var(--text-hint)', padding: '10px 0' }}>Sin componentes aún.</p>;
   }
 
-  // Agrupar por nodos
   const nodoMap = {};
   componentes.forEach((c) => {
-    [c.nodo_a, c.nodo_b].filter(Boolean).forEach((n) => {
+    const valoresNodos = Object.values(c.nodos ?? {}).filter(Boolean);
+    valoresNodos.forEach((n) => {
       if (!nodoMap[n]) nodoMap[n] = [];
       if (!nodoMap[n].find((x) => x.id === c.id)) nodoMap[n].push(c);
     });
@@ -82,11 +76,11 @@ export function ListaComponentesAgrupada({ componentes, hoveredId, onHover, onEl
   const nodos = Object.keys(nodoMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="admin-comp-group">
       {nodos.map((nodo) => (
         <div key={nodo}>
-          <p style={nodoLabel}>Nodo {nodo}</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 12, borderLeft: '2px solid var(--border)' }}>
+          <p className="admin-comp-group__node">Nodo {nodo}</p>
+          <div className="admin-comp-group__list">
             {nodoMap[nodo].map((c) => (
               <FilaComponente
                 key={`${nodo}-${c.id}`}
@@ -103,7 +97,7 @@ export function ListaComponentesAgrupada({ componentes, hoveredId, onHover, onEl
   );
 }
 
-/* ── TypeIcon ───────────────────────────────────── */
+/* ── TypeIcon ─────────────────────────────────── */
 function TypeIcon({ type }) {
   const color = 'var(--accent)';
   switch (type) {
@@ -141,7 +135,7 @@ function TypeIcon({ type }) {
     case 'bobina':
       return (
         <svg width="28" height="16" viewBox="-18 -10 36 20">
-          {[-12,-4,4,12].map((cx, i) => (
+          {[-12, -4, 4, 12].map((cx, i) => (
             <path key={i} d={`M ${cx-4} 0 A 4 4 0 0 1 ${cx+4} 0`} fill="none" stroke={color} strokeWidth="1.5"/>
           ))}
         </svg>
@@ -163,6 +157,13 @@ function TypeIcon({ type }) {
           <line x1="-6" y1="6" x2="6" y2="12" stroke={color} strokeWidth="1.5"/>
         </svg>
       );
+    case 'regulador_voltaje':
+      return (
+        <svg width="28" height="20" viewBox="-14 -10 28 20">
+          <rect x="-10" y="-7" width="20" height="14" rx="2" fill="none" stroke={color} strokeWidth="1.5"/>
+          <text x="0" y="3" textAnchor="middle" fill={color} fontSize="6" fontWeight="700">REG</text>
+        </svg>
+      );
     default:
       return (
         <svg width="28" height="16" viewBox="-14 -8 28 16">
@@ -174,11 +175,7 @@ function TypeIcon({ type }) {
 }
 
 function NodeBadge({ children }) {
-  return (
-    <span style={{ display: 'inline-block', padding: '1px 6px', background: 'rgba(108,99,255,0.12)', color: 'var(--accent)', borderRadius: 8, fontSize: 10, fontWeight: 700 }}>
-      {children}
-    </span>
-  );
+  return <span className="admin-node-pill">{children}</span>;
 }
 
 function TrashIcon() {
@@ -198,13 +195,3 @@ const LABELS = {
   transistor_bjt: 'BJT', transistor_fet: 'FET', regulador_voltaje: 'Regulador',
 };
 const labelFor = (t) => LABELS[t] ?? t;
-
-/* ── Estilos ────────────────────────────────────── */
-const rowStyle  = { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 'var(--r-sm)', border: '1px solid transparent', transition: 'background .15s, border-color .15s', cursor: 'default' };
-const iconCell  = { flexShrink: 0, width: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' };
-const idStyle   = { fontSize: 11, fontWeight: 700, color: 'var(--accent)', minWidth: 24 };
-const typeStyle = { fontSize: 11, color: 'var(--text-muted)', minWidth: 80, flexShrink: 0 };
-const valueStyle = { fontSize: 11, color: 'var(--text)', minWidth: 40 };
-const nodeStyle  = { display: 'flex', alignItems: 'center', gap: 3, flex: 1 };
-const delBtn     = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '2px 4px', borderRadius: 4, display: 'flex', flexShrink: 0 };
-const nodoLabel  = { fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' };

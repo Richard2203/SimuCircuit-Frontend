@@ -1,115 +1,88 @@
-import { useState, useEffect } from 'react';
-import { useMediator }  from './hooks/useMediator';
-import { Library }      from './components/Library/index';
-import { Simulator }    from './components/Simulator/index';
-import { AdminLogin }      from './components/admin/login/AdminLogin';
-import { AdminRecuperacion } from './components/admin/login/AdminRecuperacion';
-import { AdminPanel }   from './components/admin/panel/AdminPanel';
+import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useMediator }          from './hooks/useMediator';
+import { Library }              from './components/Library/index';
+import { Simulator }            from './components/Simulator/index';
+import { AdminLogin }           from './components/admin/login/AdminLogin';
+import { AdminRecuperacion }    from './components/admin/login/AdminRecuperacion';
+import { AdminPanel }           from './components/admin/panel/AdminPanel';
+import { authService }          from './services/admin/authService';
 
-/**
- * Enrutador hash-based para el panel de administrador.
- * Rutas reconocidas:
- *   #/admin/login       → AdminLogin
- *   #/admin/recuperacion → AdminRecuperacion
- *   #/admin/panel       → AdminPanel  (requiere sesión)
- *   (cualquier otra)    → flujo normal del simulador
- */
-function getHashRoute() {
-  const hash = window.location.hash;
-  if (hash.startsWith('#/admin/recuperacion')) return 'admin-recuperacion';
-  if (hash.startsWith('#/admin/panel'))        return 'admin-panel';
-  if (hash.startsWith('#/admin'))              return 'admin-login';
-  return 'app';
-}
+/* ── Sesion del administrador (persistida en sessionStorage) ── */
+
+const SESSION_KEY = 'admin_session';
 
 function getAdminSession() {
   try {
-    const raw = sessionStorage.getItem('admin_session');
+    const raw = sessionStorage.getItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
-
-function setAdminSession(data) {
-  sessionStorage.setItem('admin_session', JSON.stringify(data));
+function setAdminSessionStorage(data) {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
 }
-
 function clearAdminSession() {
-  sessionStorage.removeItem('admin_session');
+  sessionStorage.removeItem(SESSION_KEY);
 }
+
+/* ── App principal ──────────────────────────────────────────── */
 
 /**
  * App — Raiz de la aplicacion.
- * Usa useMediator para conectar con el Mediator (patron Mediator)
- * y el EventBus (patron Observer). Toda la logica de estado y API
- * fluye a traves del Mediator; los componentes solo reciben state,
- * dispatch y api.
  *
- * Extiende el enrutamiento con soporte de rutas /admin/* sin
- * modificar ningún componente existente del simulador.
+ * Routing con react-router-dom:
+ *   /admin/login         → AdminLogin
+ *   /admin/recuperacion  → AdminRecuperacion
+ *   /admin/panel         → AdminPanel (requiere sesión, sino → /admin/login)
+ *   /*                   → Simulador / Biblioteca (flujo principal)
+ *
  */
 export default function App() {
-  const { state, dispatch, api } = useMediator();
-  const [route,       setRoute]   = useState(getHashRoute);
   const [adminSession, setSession] = useState(getAdminSession);
 
-  // Escuchar cambios de hash para navegacion
-  useEffect(() => {
-    const onHash = () => setRoute(getHashRoute());
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-
-  // ── Helpers de navegacion ──────────────────────────
-  function goTo(hash) {
-    window.location.hash = hash;
-  }
-
   function handleLogin(result) {
-    const session = result.admin ?? result;
-    setAdminSession(session);
+    const session = result?.admin ?? result;
+    setAdminSessionStorage(session);
     setSession(session);
-    goTo('#/admin/panel');
   }
 
   function handleLogout() {
+    authService.logoutAdmin();   // limpia el token JWT del localStorage
     clearAdminSession();
     setSession(null);
-    goTo('#/admin/login');
   }
 
-  // ── Rutas del panel admin ─────────────────────────
-  if (route === 'admin-login') {
-    return (
-      <AdminLogin
-        onLogin={handleLogin}
-        onRecuperacion={() => goTo('#/admin/recuperacion')}
-      />
-    );
-  }
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/admin/login"        element={<AdminLogin onLogin={handleLogin} />} />
+        <Route path="/admin/recuperacion" element={<AdminRecuperacion />} />
+        <Route
+          path="/admin/panel"
+          element={
+            <RequireAuth session={adminSession}>
+              <AdminPanel admin={adminSession} onLogout={handleLogout} />
+            </RequireAuth>
+          }
+        />
+        <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
+        <Route path="*"      element={<MainSimulator />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
 
-  if (route === 'admin-recuperacion') {
-    return (
-      <AdminRecuperacion
-        onVolver={() => goTo('#/admin/login')}
-      />
-    );
-  }
+/* ── Guard de autenticacion ─────────────────────────────────── */
 
-  if (route === 'admin-panel') {
-    // Redirigir a login si no hay sesion
-    if (!adminSession) {
-      goTo('#/admin/login');
-      return null;
-    }
-    return (
-      <AdminPanel
-        admin={adminSession}
-        onLogout={handleLogout}
-      />
-    );
-  }
+function RequireAuth({ session, children }) {
+  if (!session) return <Navigate to="/admin/login" replace />;
+  return children;
+}
 
-  // ── Ruta principal: simulador/biblioteca (sin cambios) ──
+/* ── Vista principal del simulador ──────────────────────────── */
+
+function MainSimulator() {
+  const { state, dispatch, api } = useMediator();
   return (
     <div style={{ minHeight: '100vh', background: '#0d0d0d' }}>
       {state.selectedCircuit
