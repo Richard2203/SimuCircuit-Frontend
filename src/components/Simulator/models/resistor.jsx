@@ -1,4 +1,3 @@
-// Resistor.jsx
 import { useState } from 'react';
 import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js';
 import { ComponentValueLabel, parseNotation } from './ComponentValueLabel.jsx';

@@ -1,4 +1,3 @@
-// CurrentSource.jsx
 import { useState } from 'react';
 import { ComponentValueLabel, formatValue } from './ComponentValueLabel.jsx';
 import { useComponentValue } from '../../../hooks/useComponentValue.js';

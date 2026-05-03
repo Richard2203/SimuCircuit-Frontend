@@ -1,21 +1,15 @@
-// CapacitorCeramico.jsx — Capacitor cerámico de disco, no polarizado.
-// Vista frontal: cuerpo en forma de "lágrima" o "disco" cobre/dorado, con
-// el código numérico (3 dígitos del cap) impreso encima, y dos patas
-// verticales (una arriba, otra abajo) sin distinción de polaridad.
-//
+// CapacitorCeramico.jsx — Capacitor ceramico de disco, no polarizado.
 // Convención de pines (en local-space, antes de aplicar rotation):
 //   pinA en  (0, pinDistTop)    ← terminal superior (arriba del cuerpo)
 //   pinB en  (0, pinDistBot)    ← terminal inferior (abajo del cuerpo)
-// Esto es consistente con un componente bipolar vertical clásico, lo que
-// hace que el cap se conecte naturalmente entre dos buses horizontales.
 import { useState } from 'react';
 import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js';
 import { ComponentValueLabel, formatValue } from './ComponentValueLabel.jsx';
 import { useComponentValue } from '../../../hooks/useComponentValue.js';
 
 /**
- * Convierte un valor de capacitancia en Faradios al código de 3 dígitos
- * que se imprime en capacitores cerámicos: pp(M) donde pp son dos cifras
+ * Convierte un valor de capacitancia en Faradios al codigo de 3 digitos
+ * que se imprime en capacitores ceramicos: pp(M) donde pp son dos cifras
  * significativas y M es el multiplicador en pF. Por ejemplo:
  *   1nF = 1000pF → "102" (10 × 10^2)
  *   100pF       → "101"
@@ -57,18 +51,18 @@ export const CapacitorCeramico = ({
   const [value, setValue] = useComponentValue(id, initialValue);
   const [hovered, setHovered] = useState(false);
 
-  // Geometría base (en local-space, antes de scale)
-  const bodyW       = 70;       // ancho del "disco/blob" cerámico
+  // Geometria base (en local-space, antes de scale)
+  const bodyW       = 70;       // ancho del "disco/blob" ceramico
   const bodyH       = 78;       // alto, ligeramente alargado
   const pinLen      = 38;       // largo de cada pata visible
   const bodyTopY    = -bodyH * 0.55; // donde empieza el cuerpo (arriba)
   const bodyBotY    =  bodyH * 0.30; // donde termina el cuerpo (parte baja)
   // Pines orientados como bipolar tradicional: uno arriba, otro abajo, en x=0.
-  // Cuando rotación = 90, pasan a estar a izquierda/derecha del cuerpo.
+  // Cuando rotacion = 90, pasan a estar a izquierda/derecha del cuerpo.
   const pinDistTop  = bodyTopY - pinLen;        // pin A (arriba)
   const pinDistBot  = bodyBotY + pinLen;        // pin B (abajo)
 
-  // Pines en world-space (rotPt aplica rotación + escala)
+  // Pines en world-space (rotPt aplica rotacion + escala)
   const rotPt = (dx, dy) => {
     const r = (rotation * Math.PI) / 180;
     const c = Math.cos(r), s = Math.sin(r);
@@ -79,10 +73,10 @@ export const CapacitorCeramico = ({
 
   const handleValueChange = (v) => { setValue(v); onValueChange?.(v); };
 
-  // Código cerámico (ej. "102" para 1nF) — se muestra en grande en el cuerpo
+  // Codigo ceramico — se muestra en grande en el cuerpo
   const code = toCeramicCode(value);
 
-  // Path del cuerpo: forma de "blob" / lágrima invertida con el cuello abajo.
+  // Path del cuerpo: forma de "blob" / lagrima invertida con el cuello abajo.
   // Clave: arco superior amplio, ligero estrechamiento donde nacen las patas.
   // (M = top-left, curva por arriba a top-right, baja con curva al cuello)
   const bodyPath = `
@@ -108,7 +102,7 @@ export const CapacitorCeramico = ({
       onMouseLeave={() => setHovered(false)}
     >
       <defs>
-        {/* Cerámica color cobre/ámbar — gradiente radial cenital */}
+        {/* Cerasmica color cobre/ambar — gradiente radial cenital */}
         <radialGradient id={`${id}-ceramic`} cx="50%" cy="35%" r="70%">
           <stop offset="0%"   stopColor="#f5c97a"/>
           <stop offset="40%"  stopColor="#c97a3a"/>
@@ -139,13 +133,13 @@ export const CapacitorCeramico = ({
         <ellipse cx="0" cy={bodyBotY + 4} rx={bodyW * 0.35} ry={4}
           fill="rgba(0,0,0,0.4)" style={{ pointerEvents: 'none' }}/>
 
-        {/* Patas: dos cilindros metálicos, uno arriba y otro abajo del cuerpo */}
+        {/* Patas: dos cilindros metalicos, uno arriba y otro abajo del cuerpo */}
         <rect x={-1.5} y={pinDistTop} width="3" height={Math.abs(pinDistTop - bodyTopY) + 4} rx="1"
           fill={`url(#${id}-pin)`}/>
         <rect x={-1.5} y={bodyBotY - 2} width="3" height={pinLen + 4} rx="1"
           fill={`url(#${id}-pin)`}/>
 
-        {/* Cuerpo cerámico (blob principal) */}
+        {/* Cuerpo ceramico (blob principal) */}
         <path d={bodyPath} fill={`url(#${id}-ceramic)`}
           stroke="#3a1f08" strokeWidth="1" strokeLinejoin="round"/>
 
@@ -153,7 +147,7 @@ export const CapacitorCeramico = ({
         <path d={bodyPath} fill={`url(#${id}-shine)`}
           style={{ pointerEvents: 'none' }}/>
 
-        {/* Código cerámico — texto grande negro centrado */}
+        {/* CCodigo ceramico — texto grande negro centrado */}
         <text x="0" y={bodyTopY * 0.05}
           textAnchor="middle" dominantBaseline="middle"
           fontSize={bodyH * 0.32} fontWeight="700"

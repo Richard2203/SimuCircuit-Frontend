@@ -127,7 +127,7 @@ export function Simulator({ state, dispatch, api }) {
 
             <div className="circuit-svg-wrap" ref={svgContainerRef}>
               <button className="export-btn" onClick={exportToPNG}>↓ Exportar PNG</button>
-              <CircuitSVG circuit={c} />
+              <CircuitSVG circuit={c} energized={isActive} />
             </div>
 
             {/* Controles visuales (timer local) */}
@@ -151,7 +151,7 @@ export function Simulator({ state, dispatch, api }) {
               </button>
             </div>
 
-            {/* Controles de simulación via API — solo botones que corresponden */}
+            {/* Controles de simulacion via API — solo botones que corresponden */}
             {netlist.length > 0 && (mostrarDC || mostrarAC) && (
               <div className="sim-controls" style={{ marginTop: 8 }}>
                 {mostrarDC && (
@@ -184,7 +184,7 @@ export function Simulator({ state, dispatch, api }) {
               </div>
             )}
 
-            {/* Error de simulación */}
+            {/* Error de simulacion */}
             {simError && (
               <div
                 style={{
@@ -202,7 +202,7 @@ export function Simulator({ state, dispatch, api }) {
             )}
           </div>
 
-          {/* Descripción + métricas + análisis */}
+          {/* Descripcion + metricas + analisis */}
           <div className="sim-panel p-5">
             <div className="desc-header">
               <span style={{ fontSize: 14 }}>ℹ</span>

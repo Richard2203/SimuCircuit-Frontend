@@ -1,13 +1,11 @@
 // ACSource.jsx — Fuente de voltaje de corriente alterna senoidal.
-// Símbolo eléctrico estándar: círculo con una onda senoidal en su interior.
+// Símbolo electrico estandar: círculo con una onda senoidal en su interior.
 //
-// Convención de pines (en local-space, antes de aplicar rotation):
-//   pin 'pos' a la DERECHA del círculo (terminal +)
-//   pin 'neg' a la IZQUIERDA del círculo (terminal −, identificado además
+// Convencion de pines (en local-space, antes de aplicar rotation):
+//   pin 'pos' a la DERECHA del circulo (terminal +)
+//   pin 'neg' a la IZQUIERDA del círculo (terminal −, identificado
 //   con un cable rojo corto saliendo desde el cuerpo).
 //
-// Compatible con ComponentValueLabel (tipo voltageSource), useComponentValue
-// y rotación arbitraria.
 import { useState } from 'react';
 import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js';
 import { ComponentValueLabel } from './ComponentValueLabel.jsx';
@@ -29,7 +27,7 @@ export const ACSource = ({
   const [value, setValue] = useComponentValue(id, initialValue);
   const [hovered, setHovered] = useState(false);
 
-  // Geometría base (en local-space, antes de scale)
+  // Geometria base (en local-space, antes de scale)
   const R       = 60;        // radio del círculo
   const armLen  = 78;        // longitud del cable que sale a cada lado
   const pinDist = R + armLen;  // distancia x desde el centro hasta cada pin
@@ -45,7 +43,7 @@ export const ACSource = ({
 
   const handleValueChange = (v) => { setValue(v); onValueChange?.(v); };
 
-  // Onda senoidal dentro del círculo: 1.5 ciclos de seno, escalado al ~70% del radio
+  // Onda senoidal dentro del circulo: 1.5 ciclos de seno, escalado al ~70% del radio
   // Usa 24 puntos para que sea suave.
   const wavePts = [];
   const waveW = R * 1.4;
@@ -67,7 +65,7 @@ export const ACSource = ({
       onMouseLeave={() => setHovered(false)}
     >
       <defs>
-        {/* Cuerpo metálico oscuro con sombreado radial (para dar volumen) */}
+        {/* Cuerpo metalico oscuro con sombreado radial (para dar volumen) */}
         <radialGradient id={`${id}-body`} cx="50%" cy="35%" r="65%">
           <stop offset="0%"   stopColor="#3a4555"/>
           <stop offset="50%"  stopColor="#1f2935"/>
@@ -78,7 +76,7 @@ export const ACSource = ({
           <stop offset="0%"   stopColor="rgba(180,210,255,0.45)"/>
           <stop offset="100%" stopColor="rgba(180,210,255,0)"/>
         </radialGradient>
-        {/* Cables metálicos */}
+        {/* Cables metalicos */}
         <linearGradient id={`${id}-pin`} x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%"   stopColor="#888"/>
           <stop offset="50%"  stopColor="#ddd"/>
@@ -94,11 +92,11 @@ export const ACSource = ({
             style={{ pointerEvents: 'none' }}/>
         )}
 
-        {/* Sombra de base bajo el círculo */}
+        {/* Sombra de base bajo el circulo */}
         <ellipse cx="0" cy={R + 6} rx={R * 0.85} ry={R * 0.12}
           fill="rgba(0,0,0,0.4)" style={{ pointerEvents: 'none' }}/>
 
-        {/* Cables a izquierda y derecha (gris metálico) */}
+        {/* Cables a izquierda y derecha (gris metalico) */}
         <rect x={-pinDist} y={-3} width={armLen + 6} height={6} rx={2}
           fill={`url(#${id}-pin)`}/>
         {/* Cable rojo del lado positivo (derecha) — convención visual */}
@@ -116,7 +114,7 @@ export const ACSource = ({
         <circle cx="0" cy="0" r={R} fill={`url(#${id}-shine)`}
           style={{ pointerEvents: 'none' }}/>
 
-        {/* Onda senoidal — el símbolo del AC */}
+        {/* Onda senoidal — el simbolo del AC */}
         <path d={wavePath} fill="none" stroke="#5fb3ff" strokeWidth="3"
           strokeLinecap="round" strokeLinejoin="round"/>
 
@@ -125,7 +123,7 @@ export const ACSource = ({
           strokeLinecap="round" strokeLinejoin="round" opacity="0.25"
           style={{ pointerEvents: 'none', filter: 'blur(2px)' }}/>
 
-        {/* Marca "+" tenue arriba a la derecha (interior del círculo) */}
+        {/* Marca "+" tenue arriba a la derecha (interior del circulo) */}
         <text x={R * 0.55} y={-R * 0.55}
           textAnchor="middle" dominantBaseline="middle"
           fontSize={R * 0.26} fontWeight="700"

@@ -1,4 +1,3 @@
-// Transistor.jsx
 import { useState } from 'react';
 import { COMPONENT_SCALE } from '../ConfigComponents/circuitConfig.js';
 import { ComponentValueLabel } from './ComponentValueLabel.jsx';
@@ -11,7 +10,9 @@ export const Transistor = ({
   scale = COMPONENT_SCALE.transistor,
   // Value props
   componentId,
-  initialValue = 100, // Beta (hFE) — dimensionless
+  initialValue = 100, // Beta (hFE) por defecto cuando es BJT;
+                      // se sobrescribe con voltaje_salida cuando se usa como regulador.
+  labelType = 'bjt', // 'bjt' (β) | 'vreg' (V de salida)
   onValueChange,
 }) => {
   const id = componentId || `transistor-${x}-${y}`;
@@ -67,10 +68,10 @@ export const Transistor = ({
           <line x1="-15" y1="8" x2="15" y2="8"/>
         </g>
 
-        {/* β value label */}
+        {/* Value label: β para BJT, V para regulador */}
         <ComponentValueLabel
           componentId={id}
-          type="bjt"
+          type={labelType}
           value={value}
           onChange={handleValueChange}
           x={38}
