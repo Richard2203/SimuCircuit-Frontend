@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import {
-  DIFFICULTIES, UNITS, TOPICS_BY_UNIT, CIRCUIT_TYPES, COMPONENTS_LIST,
+  DIFFICULTIES, UNITS, TOPICS_BY_UNIT, CIRCUIT_TYPES
 } from '../../data/circuits';
 
 /**
@@ -12,11 +12,13 @@ import {
  *   dispatch:   Function,
  * }} props
  */
-export function FilterPanel({ filters, filtrosApi, dispatch }) {
+export function FilterPanel({ filters, filtrosApi, dispatch, componentesCatalogo }) {
   // Opciones: API cuando disponible, fallback a constantes locales
   const dificultades = filtrosApi?.dificultades ?? DIFFICULTIES;
   const materias     = filtrosApi?.materias     ?? UNITS;
-  const componentes  = COMPONENTS_LIST;
+  const componentes = componentesCatalogo?.length > 0
+  ? componentesCatalogo.map(c => c.tipo)
+  : [];
 
   // Temas: si la API los tiene como arreglo plano, usarlos directo;
   // si no, caer al mapa local por unidad

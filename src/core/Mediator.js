@@ -240,6 +240,7 @@ class SimuCircuitMediator {
     this._setLoading('componentes', true);
     try {
       const { data } = await ComponentesService.getComponentes();
+      console.log(JSON.stringify(data, null, 2));
       this._state.componentesCatalogo = data;
     } catch (err) {
       console.error('[Mediator] Error al cargar componentes:', err);

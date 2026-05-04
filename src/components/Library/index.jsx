@@ -44,17 +44,17 @@ const CATEGORIA_RULES = [
  * Cubre casos donde la categoría no es suficiente.
  */
 const NOMBRE_RULES = [
-  ['resistiv',    'Resistencias'],
-  [' rc ',        'Resistencias'],
-  [' rc ',        'Capacitores'],
-  [' rl ',        'Resistencias'],
-  [' rl ',        'Bobinas'],
-  ['rlc',         'Resistencias'],
-  ['rlc',         'Capacitores'],
-  ['rlc',         'Bobinas'],
-  ['capacitor',   'Capacitores'],
-  ['bobina',      'Bobinas'],
-  ['inductor',    'Bobinas'],
+  ['resistiv',    'Resistencia'],
+  [' rc ',        'Resistencia'],
+  [' rc ',        'Capacitor'],
+  [' rl ',        'Resistencia'],
+  [' rl ',        'Bobina'],
+  ['rlc',         'Resistencia'],
+  ['rlc',         'Capacitor'],
+  ['rlc',         'Bobina'],
+  ['capacitor',   'Capacitor'],
+  ['bobina',      'Bobina'],
+  ['inductor',    'Bobina'],
   ['zener',       'Diodo zener'],
   [' led',        'Diodo LED'],
   ['rectificador','Diodo rectificador'],
@@ -103,7 +103,7 @@ function getComponentLabels(circuit) {
   // casi seguro tiene resistencias.
   const catStr = categorias.map(normalize).join(' ');
   if (catStr.includes('corriente') && !catStr.includes('diodo') && !catStr.includes('transistor')) {
-    labels.add('Resistencias');
+    labels.add('Resistencia');
   }
 
   // 4. Heurística por nombre del circuito
@@ -219,6 +219,7 @@ export function Library({ state, dispatch, api }) {
   useEffect(() => {
     api.cargarFiltros();
     api.buscarCircuitos();
+    api.cargarComponentes();
   }, [api]);
 
   const isLoadingCircuitos = loading?.circuitos;
@@ -260,6 +261,7 @@ export function Library({ state, dispatch, api }) {
             filters={filters}
             filtrosApi={filtrosApi}
             dispatch={dispatch}
+            componentesCatalogo={state.componentesCatalogo}
           />
 
           {/* Conteo de resultados */}
