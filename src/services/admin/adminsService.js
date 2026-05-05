@@ -13,7 +13,7 @@ import { _mockAuthInternals } from './authService';
 
 const STORAGE_KEY = 'admin_mock_admins';
 
-/* ── Estado persistente en localStorage ──────────────────────── */
+/* --- Estado persistente en localStorage ---------------------------------- */
 function readAdmins() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -33,7 +33,7 @@ function nextId(list) {
   return max + 1;
 }
 
-/* ── API ─────────────────────────────────────────────────────── */
+/* --- API ------------------------------------------------------ */
 
 async function obtenerAdmins() {
   await new Promise((r) => setTimeout(r, 150));

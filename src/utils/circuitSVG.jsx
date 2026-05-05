@@ -1,29 +1,28 @@
 import { NetlistRenderer } from '../components/Simulator/NetlistRenderer.jsx';
+import { Circuit }        from '../domain';
 
 /**
  * CircuitSVG — Renderiza el diagrama visual de un circuito.
- *
- * Estrategia:
- *   • Si el circuito tiene netlist (array con componentes) → lo dibuja
- *     dinamicamente con NetlistRenderer 
- *   • Si no tiene netlist → muestra un placeholder con el nombre del circuito.
- *
  * @param {object}  props
- * @param {object}  props.circuit     Circuito (debe tener netlist).
- * @param {boolean} [props.preview]   Modo compacto (cards/listados).
- * @param {boolean} [props.energized] muestra de animacion si hay energizacion
+ * @param {Circuit|object} props.circuit  - Circuit (o JSON crudo) a renderizar.
+ * @param {boolean} [props.preview]       - Modo compacto (cards/listados).
+ * @param {boolean} [props.energized]     - Animacion de energizacion.
  */
 export function CircuitSVG({ circuit, preview = false, energized = false }) {
   if (!circuit) return null;
 
+  const c = circuit instanceof Circuit ? circuit : Circuit.fromAny(circuit);
   const h = preview ? 120 : 300;
 
-  // Render dinamico desde netlist
-  if (Array.isArray(circuit.netlist) && circuit.netlist.length > 0) {
+  if (Array.isArray(c.netlist) && c.netlist.length > 0) {
+    // NetlistRenderer espera la forma JSON; pasamos el toJSON() de cada Component.
+    const netlistJSON = c.netlist.map((comp) =>
+      typeof comp?.toJSON === 'function' ? comp.toJSON() : comp
+    );
     return (
       <div style={{ width: '100%', height: preview ? h : '100%', minHeight: h }}>
         <NetlistRenderer
-          netlist={circuit.netlist}
+          netlist={netlistJSON}
           preview={preview}
           energized={energized}
         />
@@ -32,7 +31,6 @@ export function CircuitSVG({ circuit, preview = false, energized = false }) {
   }
 
   // Placeholder cuando aun no hay netlist
-  const label = circuit.name ?? circuit.nombre_circuito ?? circuit.nombre ?? '';
   return (
     <svg
       width="100%"
@@ -44,7 +42,7 @@ export function CircuitSVG({ circuit, preview = false, energized = false }) {
         textAnchor="middle" dominantBaseline="middle"
         fill="#2d3748" fontSize="12" fontFamily="monospace"
       >
-        {preview ? label : `"${label}" — sin diagrama disponible`}
+        {preview ? c.nombre : `"${c.nombre}" — sin diagrama disponible`}
       </text>
     </svg>
   );

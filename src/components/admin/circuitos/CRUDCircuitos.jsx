@@ -7,21 +7,17 @@ import { circuitosAdminService } from '../../../services/admin/circuitosAdminSer
 /**
  * CRUDCircuitos — Pestaña 2 del panel admin: alta/edicion de circuitos.
  *
- * Layout:
- *   • Barra de acciones: [+ Nuevo]  [≡ Ver listado]   [badge modo edición]
- *   • Por debajo: <FormularioCircuito> (modo crear o editar)
- *   • Panel lateral deslizable con la lista existente
+ * `circuitosAdminService.obtenerCircuitos()` devuelve `Circuit[]`,
+ * y `obtenerCircuitoPorId()` devuelve `{ circuito: Circuit, netlist: Component[] }`.
  */
 export function CRUDCircuitos() {
   const [circuitos,        setCircuitos]    = useState([]);
   const [loadingLista,     setLoadingLista] = useState(false);
   const [panelAbierto,     setPanelAbierto] = useState(false);
-  const [modo,             setModo]         = useState('crear');     // 'crear' | 'editar'
+  const [modo,             setModo]         = useState('crear');
   const [circuitoEditando, setCircuitoEditando] = useState(null);
   const [netlistEditando,  setNetlistEditando]  = useState([]);
   const [modalEliminar,    setModalEliminar]    = useState(null);
-
-  // Trigger para forzar el remount del formulario (limpiar estado interno)
   const [formKey, setFormKey] = useState(0);
 
   useEffect(() => { cargarLista(); }, []);
@@ -74,7 +70,6 @@ export function CRUDCircuitos() {
   return (
     <div className="admin-crud-container">
 
-      {/* Barra de acciones superior */}
       <div className="admin-crud-actionbar">
         <div className="admin-crud-actionbar__group">
           <button className="admin-btn admin-btn--primary admin-btn--sm" onClick={handleNuevo}>
@@ -85,16 +80,15 @@ export function CRUDCircuitos() {
           </button>
         </div>
 
-        <div className={`admin-mode-badge`}>
+        <div className="admin-mode-badge">
           <span className={`admin-mode-badge__dot ${modo === 'editar' ? 'admin-mode-badge__dot--editing' : ''}`} />
           {modo === 'editar'
-            ? <>Editando: <strong style={{ color: 'var(--text)', marginLeft: 4 }}>{circuitoEditando?.nombre_circuito}</strong></>
+            ? <>Editando: <strong style={{ color: 'var(--text)', marginLeft: 4 }}>{circuitoEditando?.nombre}</strong></>
             : 'Modo: Nuevo circuito'
           }
         </div>
       </div>
 
-      {/* Formulario activo */}
       <FormularioCircuito
         key={formKey}
         modo={modo}
@@ -104,7 +98,6 @@ export function CRUDCircuitos() {
         onCancelar={handleNuevo}
       />
 
-      {/* Panel lateral con lista existente */}
       <PanelListaCircuitos
         abierto={panelAbierto}
         circuitos={circuitos}
@@ -114,11 +107,10 @@ export function CRUDCircuitos() {
         onEliminar={(c) => setModalEliminar(c)}
       />
 
-      {/* Confirmacion de eliminacion */}
       <ModalConfirmacion
         abierto={!!modalEliminar}
         titulo="Eliminar circuito"
-        mensaje={`¿Eliminar el circuito "${modalEliminar?.nombre_circuito}"? Esta acción no se puede deshacer.`}
+        mensaje={`¿Eliminar el circuito "${modalEliminar?.nombre}"? Esta acción no se puede deshacer.`}
         labelConfirmar="Eliminar"
         onConfirmar={() => handleEliminar(modalEliminar)}
         onCancelar={() => setModalEliminar(null)}

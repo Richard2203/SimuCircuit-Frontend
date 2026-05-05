@@ -1,15 +1,15 @@
 /**
  * useComponentValue — Observer hook
  *
- * Gestiona el valor numérico local de un componente del canvas SVG.
+ * Gestiona el valor numerico local de un componente del canvas SVG.
  * Se suscribe a COMPONENT_VALUE_CHANGED en el EventBus para que cambios
  * externos (ej. sidebar, otro panel) se reflejen aquí (Observer).
  *
- * Al confirmar un nuevo valor, además de publicar COMPONENT_VALUE_CHANGED,
+ * Al confirmar un nuevo valor, ademas de publicar COMPONENT_VALUE_CHANGED,
  * despacha SET_NETLIST al Mediator para mantener la netlist del estado
  * global sincronizada con lo que el usuario ve en el canvas.
  *
- * @param {string} componentId  - ID único del componente (ej. "R1")
+ * @param {string} componentId  - ID unico del componente (ej. "R1")
  * @param {number} initialValue - Valor inicial en unidades SI
  * @returns {[number, (v: number) => void]}
  */

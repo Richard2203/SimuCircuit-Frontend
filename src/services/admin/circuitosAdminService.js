@@ -1,27 +1,9 @@
-/**
- * circuitosAdminService — CRUD de circuitos desde el panel de administrador.
- *
- *   LECTURA
- *   Reutiliza los endpoints REALES del simulador a traves de
- *   CircuitosService:
- *     GET /api/circuitos          → lista de circuitos
- *     GET /api/circuitos/:id      → circuito + netlist
- *     GET /api/circuitos/filtros  → catalogo (materias, temas, dificultades)
- *
- *   ESCRITURAS
- *     • Crear  → se agrega a una lista local con id ≥ 100000
- *     • Editar → se guarda como override en un mapa local
- *     • Borrar → se marca el id como "deleted" y se filtra al listar
- *
- */
-
 import { apiClient }        from '../simulator/apiClient';
 import { CircuitosService } from '../simulator/CircuitosService';
+import { Circuit }          from '../../domain';
 
 const OVERRIDES_KEY = 'admin_mock_circuitos_overrides';
-const LOCAL_ID_BASE = 100000; // ids locales bien por encima del rango del backend
-
-/* ── Categorías estaticas */
+const LOCAL_ID_BASE = 100000;
 
 const CATEGORIAS_FALLBACK = [
   'Circuito en Serie', 'Circuito en Paralelo', 'Circuito Mixto (Serie-Paralelo)',
@@ -35,7 +17,7 @@ const CATEGORIAS_FALLBACK = [
   'Fuentes de Alimentación / Regulación', 'Diodos: LED',
 ];
 
-/* ── Storage helpers ─────────────────────────────────────────── */
+/* ── Storage helpers ──────────────────────────────────────────────────── */
 
 function readOverrides() {
   try {
@@ -62,12 +44,12 @@ function nextLocalId(overrides) {
   return max + 1;
 }
 
-function unwrap(res) {
-  return res?.data ?? res;
-}
+/* -- API: LECTURAS ----------------------------------------------------- */
 
-/* ── API: LECTURAS ───────────────────────────────────────────── */
-
+/**
+ * Lista todos los circuitos aplicando edits y filtrando deletes.
+ * @returns {Promise<Circuit[]>}
+ */
 async function obtenerCircuitos() {
   const overrides = readOverrides();
 
@@ -79,34 +61,39 @@ async function obtenerCircuitos() {
     reales = [];
   }
 
-  // Aplicar edits y excluir deletes sobre los reales
   const realesProcesados = reales
     .filter((c) => !overrides.deleted.includes(c.id))
-    .map((c) => overrides.edited[c.id] ? { ...c, ...overrides.edited[c.id] } : c);
+    .map((c) => {
+      const edit = overrides.edited[c.id];
+      if (!edit) return c;
+      // Aplicar override sobre la instancia: clonar y sobrescribir campos.
+      return new Circuit({ ...c.toJSON(), ...edit });
+    });
 
-  // Locales (creados desde el admin) — no pasan por delete porque tienen id local
-  const locales = overrides.created.filter((c) => !overrides.deleted.includes(c.id));
+  const locales = overrides.created
+    .filter((c) => !overrides.deleted.includes(c.id))
+    .map((raw) => new Circuit(raw));
 
   return [...realesProcesados, ...locales];
 }
 
 /**
  * Obtiene un circuito completo con su netlist por ID.
+ * @param {number|string} id
+ * @returns {Promise<{ circuito: Circuit, netlist: import('../../domain').Component[] }>}
  */
 async function obtenerCircuitoPorId(id) {
-  const numId    = Number(id);
+  const numId     = Number(id);
   const overrides = readOverrides();
 
   // Caso A: circuito creado localmente
   if (numId >= LOCAL_ID_BASE) {
-    const local = overrides.created.find((c) => c.id === numId);
-    if (!local) {
+    const localRaw = overrides.created.find((c) => c.id === numId);
+    if (!localRaw) {
       throw Object.assign(new Error('Circuito no encontrado.'), { status: 404 });
     }
-    return {
-      circuito: local,
-      netlist:  local._netlist ?? [],
-    };
+    const circuit = new Circuit(localRaw);
+    return { circuito: circuit, netlist: circuit.netlist };
   }
 
   // Caso B: circuito real, posiblemente parchado por un edit local
@@ -114,34 +101,34 @@ async function obtenerCircuitoPorId(id) {
   const edit = overrides.edited[numId];
 
   if (edit) {
-    return {
-      circuito: { ...real.circuito, ...edit },
-      netlist:  edit._netlist ?? real.netlist,
-    };
+    const merged = new Circuit({ ...real.toJSON(), ...edit });
+    return { circuito: merged, netlist: merged.netlist };
   }
-  return real;
+  return { circuito: real, netlist: real.netlist };
 }
 
-/* ── API: CATALOGOS ──────────────────────────────────────────── */
+/* --- API: CATALOGOS ---------------------------------------------------- */
 
 /**
  * Catalogos para el formulario de creacion/edicion.
- * - materias, temas, dificultades vienen del filtro real del backend.
- * - unidades_tematicas se derivan de la lista de circuitos (campo
- *   `unidad_tematica` de cada circuito agrupado por `materia`).
- * - categorias es una lista estatica 
+ * @returns {Promise<{
+ *   materias: string[],
+ *   temas: string[],
+ *   dificultades: string[],
+ *   unidades_tematicas: Record<string, string[]>,
+ *   categorias: string[],
+ * }>}
  */
 async function obtenerCatalogos() {
-  // Lanzamos las 2 lecturas en paralelo y toleramos fallos
   const [filtrosRes, circuitosRes] = await Promise.allSettled([
     CircuitosService.getFiltros(),
     obtenerCircuitos(),
   ]);
 
-  const filtros = filtrosRes.status === 'fulfilled' ? (filtrosRes.value ?? {}) : {};
+  const filtros   = filtrosRes.status   === 'fulfilled' ? (filtrosRes.value ?? {}) : {};
   const circuitos = circuitosRes.status === 'fulfilled' ? circuitosRes.value : [];
 
-  // Derivar mapa { materia: [unidades_tematicas...] } de los circuitos reales
+  // Derivar { materia: [unidades_tematicas...] } a partir de los circuitos
   const unidadesMap = {};
   circuitos.forEach((c) => {
     if (!c.materia || !c.unidad_tematica) return;
@@ -160,70 +147,75 @@ async function obtenerCatalogos() {
   };
 }
 
-/* ── API: ESCRITURAS (mock) ──────────────────────────────────── */
-async function crearCircuito({ circuito, netlist, miniatura_svg }) {
+/* --- API: ESCRITURAS (mock) ---------------------------------------------------- */
+
+/**
+ * Crea un circuito.  Acepta tanto Circuit como JSON crudo.
+ *
+ * @param {{ circuito: object, netlist: Array, miniatura_svg?: string } | Circuit} arg
+ */
+async function crearCircuito(arg) {
   await new Promise((r) => setTimeout(r, 250));
   const overrides = readOverrides();
+
+  // Aceptar tanto un Circuit como el contrato { circuito, netlist, miniatura_svg }
+  let circuit;
+  if (arg instanceof Circuit) {
+    circuit = arg;
+  } else {
+    circuit = new Circuit({
+      ...(arg.circuito ?? {}),
+      nombre:        arg.circuito?.nombre_circuito ?? arg.circuito?.nombre ?? '',
+      netlist:       arg.netlist ?? [],
+      miniatura_svg: arg.miniatura_svg ?? '<svg/>',
+    });
+  }
+
   const id = nextLocalId(overrides);
-
-  const registro = {
-    id,
-    nombre_circuito: circuito.nombre_circuito,
-    descripcion:     circuito.descripcion,
-    dificultad:      circuito.dificultad,
-    materia:         circuito.materia,
-    unidad_tematica: circuito.unidad_tematica,
-    tema:            circuito.tema,
-    categorias:      circuito.categorias ?? [],
-    tipos_componentes: circuito.tipos_componentes ?? [],
-    miniatura_svg:   miniatura_svg ?? '<svg/>',
-    activo:          1,
-    _netlist:        netlist ?? [],  
-  };
-
-  overrides.created.push(registro);
+  const json = { ...circuit.toJSON(), id };
+  overrides.created.push(json);
   writeOverrides(overrides);
   return { id };
 }
 
 /**
  * Edita un circuito existente.
-*/
-async function editarCircuito({ id, circuito, netlist, miniatura_svg }) {
+ * @param {{ id: number|string, circuito: object, netlist: Array, miniatura_svg?: string } | (Circuit & { id: number|string })} arg
+ */
+async function editarCircuito(arg) {
   await new Promise((r) => setTimeout(r, 200));
-  const numId = Number(id);
   const overrides = readOverrides();
 
-  const datos = {
-    nombre_circuito: circuito.nombre_circuito,
-    descripcion:     circuito.descripcion,
-    dificultad:      circuito.dificultad,
-    materia:         circuito.materia,
-    unidad_tematica: circuito.unidad_tematica,
-    tema:            circuito.tema,
-    categorias:      circuito.categorias ?? [],
-    tipos_componentes: circuito.tipos_componentes ?? [],
-    miniatura_svg:   miniatura_svg ?? '<svg/>',
-    _netlist:        netlist ?? [],
-  };
+  const id = Number(arg.id);
+  let circuit;
+  if (arg instanceof Circuit) {
+    circuit = arg;
+  } else {
+    circuit = new Circuit({
+      ...(arg.circuito ?? {}),
+      nombre:        arg.circuito?.nombre_circuito ?? arg.circuito?.nombre ?? '',
+      netlist:       arg.netlist ?? [],
+      miniatura_svg: arg.miniatura_svg ?? '<svg/>',
+    });
+  }
+  const datos = circuit.toJSON();
 
-  if (numId >= LOCAL_ID_BASE) {
-    // Editar uno creado localmente
-    const idx = overrides.created.findIndex((c) => c.id === numId);
+  if (id >= LOCAL_ID_BASE) {
+    const idx = overrides.created.findIndex((c) => c.id === id);
     if (idx === -1) {
       throw Object.assign(new Error('Circuito local no encontrado.'), { status: 404 });
     }
-    overrides.created[idx] = { ...overrides.created[idx], ...datos };
+    overrides.created[idx] = { ...overrides.created[idx], ...datos, id };
   } else {
-    // Override sobre uno real
-    overrides.edited[numId] = datos;
+    overrides.edited[id] = datos;
   }
   writeOverrides(overrides);
   return { mensaje: 'Circuito actualizado correctamente.' };
 }
 
 /**
- * Elimina un circuito.s
+ * Elimina un circuito.
+ * @param {{ id: number|string }} arg
  */
 async function eliminarCircuito({ id }) {
   await new Promise((r) => setTimeout(r, 150));
@@ -240,14 +232,14 @@ async function eliminarCircuito({ id }) {
   return { mensaje: 'Circuito eliminado correctamente.' };
 }
 
-/* ── Helper de debug (útil durante desarrollo) ───────────────── */
+/* ── Helper de debug ──────────────────────────────────────────────────── */
 
 export function _resetMockOverrides() {
   try { localStorage.removeItem(OVERRIDES_KEY); }
   catch { /* ignore */ }
 }
 
-/* ── Export ──────────────────────────────────────────────────── */
+/* ── Export ───────────────────────────────────────────────────────────── */
 
 export const circuitosAdminService = {
   obtenerCircuitos,
@@ -258,5 +250,4 @@ export const circuitosAdminService = {
   obtenerCatalogos,
 };
 
-// Suppress "unused" warning de apiClient para futuro uso real
 export { apiClient as _futureApiClient };

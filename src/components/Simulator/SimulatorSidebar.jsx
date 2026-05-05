@@ -1,37 +1,23 @@
 import { getDifficultyClass, getDifficultyLabel } from '../../utils/difficulty';
 import { formatTime } from '../../hooks/useSimTime';
-
-/**
- * Cuenta componentes de una netlist por tipo.
- * @param {Array} netlist
- * @returns {{ R, C, L, F, M }}
- */
-function contarDesdeNetlist(netlist) {
-  if (!Array.isArray(netlist) || netlist.length === 0) return null;
-  const counts = { R: 0, C: 0, L: 0, F: 0 };
-  netlist.forEach(({ type }) => {
-    if (type === 'resistencia')                          counts.R++;
-    else if (type === 'capacitor')                       counts.C++;
-    else if (type === 'bobina')                          counts.L++;
-    else if (type === 'fuente_voltaje' || type === 'fuente_corriente') counts.F++;
-  });
-  return counts;
-}
+import { Circuit }    from '../../domain';
 
 /**
  * SimulatorSidebar — Panel lateral de estado del simulador.
- * Soporta circuitos del dataset local (campos en inglés) y de la API
- * (campos en español: dificultad, materia, unidad_tematica).
  *
- * @param {{ circuit: object, simStatus: string, simTime: number, netlist?: Array }} props
+ * @param {{
+ *   circuit: Circuit,
+ *   simStatus: string,
+ *   simTime: number,
+ *   netlist?: Array
+ * }} props
  */
 export function SimulatorSidebar({ circuit, simStatus, simTime, netlist }) {
-  // ── Normalización de campos ─────────────────────────────────
-  const difficulty = circuit.difficulty ?? circuit.dificultad ?? '';
-  const unit       = circuit.unit ?? circuit.materia ?? '';
-  const topic      = circuit.topic ?? circuit.unidad_tematica ?? '';
-  const diffClass  = getDifficultyClass(difficulty);
-  const diffLabel  = getDifficultyLabel(difficulty);
+  // Defensa contra JSON crudo
+  const c = circuit instanceof Circuit ? circuit : Circuit.fromAny(circuit);
+
+  const diffClass = getDifficultyClass(c.dificultad);
+  const diffLabel = getDifficultyLabel(c.dificultad);
 
   const isActive = simStatus === 'activo';
 
@@ -59,43 +45,43 @@ export function SimulatorSidebar({ circuit, simStatus, simTime, netlist }) {
     },
   ];
 
-  // ── Conteo de componentes: netlist API > campos locales ─────
-  const netlistCounts = contarDesdeNetlist(netlist ?? circuit.netlist);
+  // Conteos: si nos pasaron netlist explicita, recalcular sobre esa
+  const counts = (() => {
+    if (Array.isArray(netlist) && netlist.length > 0 && netlist !== c.netlist) {
+      // Construir un Circuit "espejo" solo para reusar el getter componentCounts
+      return c.withNetlist(netlist).componentCounts;
+    }
+    return c.componentCounts;
+  })();
 
-  const componentRows = netlistCounts
-    ? [
-        { label: 'Resistencias',  value: netlistCounts.R || '—' },
-        { label: 'Capacitores',   value: netlistCounts.C || '—' },
-        { label: 'Bobinas',       value: netlistCounts.L || '—' },
-        { label: 'Fuentes',       value: netlistCounts.F || '—' },
-      ]
-    : [
-        { label: 'Resistencias',  value: circuit.R ?? '—' },
-        { label: 'Capacitores',   value: circuit.C ?? '—' },
-        { label: 'Bobinas',       value: circuit.L ?? '—' },
-        { label: 'Fuentes',       value: circuit.F ?? '—' },
-        { label: 'Mallas',        value: circuit.M ?? '—' },
-      ];
+  const componentRows = [
+    { label: 'Resistencias', value: counts.R || '—' },
+    { label: 'Capacitores',  value: counts.C || '—' },
+    { label: 'Bobinas',      value: counts.L || '—' },
+    { label: 'Fuentes',      value: counts.F || '—' },
+    { label: 'Diodos',       value: counts.D || '—' },
+    { label: 'Transistores', value: (counts.Q + counts.J) || '—' },
+  ].filter((r) => r.value !== '—' || ['Resistencias', 'Capacitores', 'Bobinas', 'Fuentes'].includes(r.label));
 
   return (
     <aside className="sim-sidebar sim-panel p-4">
       <h3 className="sidebar-title">Estado del Simulador</h3>
 
-      {/* Materia y tema (circuitos API) */}
-      {unit && (
+      {/* Materia y tema */}
+      {c.materia && (
         <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
           <p style={{ fontSize: 10, color: 'var(--text-hint)', textTransform: 'uppercase',
             letterSpacing: '0.07em', fontWeight: 600, marginBottom: 4 }}>
             Materia
           </p>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>{unit}</p>
-          {topic && (
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>{c.materia}</p>
+          {c.unidad_tematica && (
             <>
               <p style={{ fontSize: 10, color: 'var(--text-hint)', textTransform: 'uppercase',
                 letterSpacing: '0.07em', fontWeight: 600, margin: '8px 0 4px' }}>
                 Tema
               </p>
-              <p style={{ fontSize: 11, color: 'var(--text-hint)', lineHeight: 1.4 }}>{topic}</p>
+              <p style={{ fontSize: 11, color: 'var(--text-hint)', lineHeight: 1.4 }}>{c.unidad_tematica}</p>
             </>
           )}
         </div>

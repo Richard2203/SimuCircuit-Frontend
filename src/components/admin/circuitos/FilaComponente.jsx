@@ -1,43 +1,38 @@
-/**
- * Etiqueta corta y compacta del nombre del pin (para mostrarla junto al nodo).
- */
-const PIN_ABBR = {
-  a: 'A', b: 'B', w: 'W',
-  anodo: 'A', catodo: 'K',
-  base: 'B', colector: 'C', emisor: 'E',
-  gate: 'G', drain: 'D', source: 'S',
-  vin: 'IN', vout: 'OUT', ref: 'REF',
-};
+import { Component, labelForTipo, labelForPin, resolvePinKey } from '../../../domain';
 
 /**
  * FilaComponente — Fila individual de un componente en la lista de la netlist.
  *
+ * Acepta tanto Component (instancia tipada) como objetos JSON crudos del
+ * formato admin (con `nodos`).  Internamente normaliza al formato admin para
+ * que el resto del archivo no tenga que ramificar.
+ *
  * @param {{
- *   comp: { id, type, value, nodos: Record<string,string> },
+ *   comp: import('../../../domain').Component | { id, type, value, nodos: Record<string,string> },
  *   hoveredId: string|null,
  *   onHover: (id: string|null) => void,
  *   onEliminar: (id: string) => void,
  * }} props
  */
 export function FilaComponente({ comp, hoveredId, onHover, onEliminar }) {
-  const highlighted = hoveredId === comp.id;
-  const pinEntries  = Object.entries(comp.nodos ?? {});
+  const view = toViewModel(comp);
+  const highlighted = hoveredId === view.id;
 
   return (
     <div
       className={`admin-comp-row ${highlighted ? 'admin-comp-row--hover' : ''}`}
-      onMouseEnter={() => onHover(comp.id)}
+      onMouseEnter={() => onHover(view.id)}
       onMouseLeave={() => onHover(null)}
     >
-      <div className="admin-comp-row__icon"><TypeIcon type={comp.type} /></div>
-      <span className="admin-comp-row__id">{comp.id}</span>
-      <span className="admin-comp-row__type">{labelFor(comp.type)}</span>
-      <span className="admin-comp-row__value">{comp.value || '—'}</span>
+      <div className="admin-comp-row__icon"><TypeIcon type={view.type} /></div>
+      <span className="admin-comp-row__id">{view.id}</span>
+      <span className="admin-comp-row__type">{labelForTipo(view.type)}</span>
+      <span className="admin-comp-row__value">{view.value || '—'}</span>
       <span className="admin-comp-row__nodes">
-        {pinEntries.map(([pinKey, nodo], i) => (
-          <span key={pinKey} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+        {view.pines.map(({ pinAdmin, pinCanonico, nodo }, i) => (
+          <span key={pinAdmin} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
             {i > 0 && <span className="admin-node-arrow">·</span>}
-            <span className="admin-pin-label">{PIN_ABBR[pinKey] ?? pinKey}</span>
+            <span className="admin-pin-label">{labelForPin(pinCanonico) ?? pinAdmin}</span>
             <span style={{ fontSize: 9, color: 'var(--text-hint)' }}>=</span>
             <NodeBadge>{nodo || '?'}</NodeBadge>
           </span>
@@ -47,7 +42,7 @@ export function FilaComponente({ comp, hoveredId, onHover, onEliminar }) {
         type="button"
         className="admin-comp-row__del"
         title="Eliminar componente"
-        onClick={() => onEliminar(comp.id)}
+        onClick={() => onEliminar(view.id)}
       >
         <TrashIcon />
       </button>
@@ -56,8 +51,40 @@ export function FilaComponente({ comp, hoveredId, onHover, onEliminar }) {
 }
 
 /**
+ * Convierte cualquier forma de componente a un view-model uniforme:
+ *   { id, type, value, pines: [{ pinAdmin, pinCanonico, nodo }] }
+ */
+function toViewModel(comp) {
+  // Caso 1: instancia Component -> usar nodes canonicos directamente
+  if (comp instanceof Component) {
+    const adminJson = comp.toAdminJSON();
+    return {
+      id:    comp.id,
+      type:  comp.type,
+      value: comp.value,
+      pines: Object.entries(adminJson.nodos ?? {}).map(([pinAdmin, nodo]) => ({
+        pinAdmin,
+        pinCanonico: resolvePinKey(comp.type, pinAdmin),
+        nodo,
+      })),
+    };
+  }
+
+  // Caso 2: JSON crudo (formato admin con `nodos`)
+  return {
+    id:    comp.id,
+    type:  comp.type,
+    value: comp.value,
+    pines: Object.entries(comp.nodos ?? comp.nodes ?? {}).map(([pinAdmin, nodo]) => ({
+      pinAdmin,
+      pinCanonico: resolvePinKey(comp.type, pinAdmin),
+      nodo: typeof nodo === 'object' ? nodo.nodo : nodo,
+    })),
+  };
+}
+
+/**
  * ListaComponentesAgrupada — Componentes agrupados por nodo compartido.
- * Para componentes multi-pin, aparecen bajo cada nodo al que se conecten.
  */
 export function ListaComponentesAgrupada({ componentes, hoveredId, onHover, onEliminar }) {
   if (componentes.length === 0) {
@@ -66,11 +93,14 @@ export function ListaComponentesAgrupada({ componentes, hoveredId, onHover, onEl
 
   const nodoMap = {};
   componentes.forEach((c) => {
-    const valoresNodos = Object.values(c.nodos ?? {}).filter(Boolean);
-    valoresNodos.forEach((n) => {
-      if (!nodoMap[n]) nodoMap[n] = [];
-      if (!nodoMap[n].find((x) => x.id === c.id)) nodoMap[n].push(c);
-    });
+    const view = toViewModel(c);
+    view.pines
+      .map((p) => p.nodo)
+      .filter(Boolean)
+      .forEach((n) => {
+        if (!nodoMap[n]) nodoMap[n] = [];
+        if (!nodoMap[n].find((x) => x.id === view.id)) nodoMap[n].push(c);
+      });
   });
 
   const nodos = Object.keys(nodoMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -81,15 +111,18 @@ export function ListaComponentesAgrupada({ componentes, hoveredId, onHover, onEl
         <div key={nodo}>
           <p className="admin-comp-group__node">Nodo {nodo}</p>
           <div className="admin-comp-group__list">
-            {nodoMap[nodo].map((c) => (
-              <FilaComponente
-                key={`${nodo}-${c.id}`}
-                comp={c}
-                hoveredId={hoveredId}
-                onHover={onHover}
-                onEliminar={onEliminar}
-              />
-            ))}
+            {nodoMap[nodo].map((c) => {
+              const id = c instanceof Component ? c.id : c.id;
+              return (
+                <FilaComponente
+                  key={`${nodo}-${id}`}
+                  comp={c}
+                  hoveredId={hoveredId}
+                  onHover={onHover}
+                  onEliminar={onEliminar}
+                />
+              );
+            })}
           </div>
         </div>
       ))}
@@ -187,11 +220,3 @@ function TrashIcon() {
     </svg>
   );
 }
-
-const LABELS = {
-  resistencia: 'Resistencia', resistencia_variable: 'Resistencia var.',
-  fuente_voltaje: 'Fuente V', fuente_corriente: 'Fuente I',
-  capacitor: 'Capacitor', bobina: 'Bobina', diodo: 'Diodo',
-  transistor_bjt: 'BJT', transistor_fet: 'FET', regulador_voltaje: 'Regulador',
-};
-const labelFor = (t) => LABELS[t] ?? t;

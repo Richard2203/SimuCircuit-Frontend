@@ -5,17 +5,17 @@
  * el Mediator sin necesidad de leer el estado completo.
  *
  * Eventos disponibles:
- *   - 'simulacion:iniciada'    { tipo, netlist }
- *   - 'simulacion:completada'  { tipo, resultado }
- *   - 'simulacion:error'       { tipo, error }
- *   - 'circuito:cargado'       circuitoConNetlist
- *   - 'filtros:actualizados'   filtrosApi
+ *   - simulacion:iniciada    { tipo, netlist }
+ *   - simulacion:completada  { tipo, resultado }
+ *   - simulacion:error       { tipo, error }
+ *   - circuito:cargado       circuitoConNetlist
+ *   - filtros:actualizados   filtrosApi
  *
- * @param {object} handlers - Mapa de evento → callback
+ * @param {object} handlers - Mapa de evento -> callback
  * @example
  *   useSimulacionEvents({
- *     'simulacion:completada': ({ tipo, resultado }) => console.log(tipo, resultado),
- *     'simulacion:error':      ({ error }) => toast.error(error),
+ *     simulacion:completada: ({ tipo, resultado }) => console.log(tipo, resultado),
+ *     simulacion:error:      ({ error }) => toast.error(error),
  *   });
  */
 

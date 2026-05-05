@@ -1,39 +1,22 @@
 import { toPng } from 'html-to-image';
 import { useRef } from 'react';
-import { CircuitSVG }        from '../../utils/circuitSVG';
+import { CircuitSVG }         from '../../utils/circuitSVG';
 import { getDifficultyClass } from '../../utils/difficulty';
 import { useSimTime }         from '../../hooks/useSimTime';
 import { AccordionSection }   from './AccordionSection';
 import { WaveformChart }      from './WaveformChart';
 import { SimulatorSidebar }   from './SimulatorSidebar';
-import { TeoremasPanel }       from './TeoremasPanel';
+import { TeoremasPanel }      from './TeoremasPanel';
+import { Circuit }            from '../../domain';
 
-function normalizar(c, netlist) {
-  const name       = c.name ?? c.nombre_circuito ?? c.nombre ?? '—';
-  const difficulty = c.difficulty ?? c.dificultad ?? '';
-  const unit       = c.unit ?? c.materia ?? '';
-  const topic      = c.topic ?? c.unidad_tematica ?? '';
-  const desc       = c.descripcion ?? c.description ?? null;
-
-  let voltage    = c.voltage    ?? 0;
-  let current    = c.current    ?? 0;
-  let resistance = c.resistance ?? 0;
-
-  if (!voltage && Array.isArray(netlist) && netlist.length > 0) {
-    const fv = netlist.find((n) => n.type === 'fuente_voltaje');
-    if (fv) voltage = parseFloat(fv.value) || 0;
-    const fc = netlist.find((n) => n.type === 'fuente_corriente');
-    if (fc) current = parseFloat(fc.value) || 0;
-    const r = netlist.find((n) => n.type === 'resistencia');
-    if (r) resistance = parseFloat(r.value) || 0;
-  }
-
-  return { name, difficulty, unit, topic, desc, voltage, current, resistance };
-}
-
+/**
+ * Simulator — Vista del simulador para un circuito seleccionado.
+ *
+ * @param {{ state: object, dispatch: Function, api: object }} props
+ */
 export function Simulator({ state, dispatch, api }) {
   const {
-    selectedCircuit: c,
+    selectedCircuit,
     simStatus,
     activeTab,
     simResultadoDC,
@@ -46,6 +29,13 @@ export function Simulator({ state, dispatch, api }) {
 
   const svgContainerRef = useRef(null);
   const simTime = useSimTime();
+
+  if (!selectedCircuit) return null;
+
+  /** @type {Circuit} */
+  const c = selectedCircuit instanceof Circuit
+    ? selectedCircuit
+    : Circuit.fromAny(selectedCircuit);
 
   const exportToPNG = async () => {
     if (!svgContainerRef.current) return;
@@ -61,7 +51,7 @@ export function Simulator({ state, dispatch, api }) {
         cacheBust: true,
       });
       const link = document.createElement('a');
-      link.download = `circuito_${c?.id || 'export'}.png`;
+      link.download = `circuito_${c.id || 'export'}.png`;
       link.href = dataUrl;
       link.click();
     } catch (error) {
@@ -69,28 +59,21 @@ export function Simulator({ state, dispatch, api }) {
     }
   };
 
-  if (!c) return null;
+  const isActive  = simStatus === 'activo';
+  const diffClass = getDifficultyClass(c.dificultad);
 
-  const norm = normalizar(c, netlist);
-
-  const isActive   = simStatus === 'activo';
-  const diffClass  = getDifficultyClass(norm.difficulty);
-  const voltage    = norm.voltage;
-  const current    = norm.current;
-  const resistance = norm.resistance;
+  // Metricas — calculadas desde la netlist canonica
+  const voltage    = c.voltajePrincipal;
+  const current    = c.corrientePrincipal;
+  const resistance = c.resistenciaPrincipal;
   const power      = parseFloat((voltage * current).toFixed(2));
 
   const isRunningDC = loading?.simulacionDC;
   const isRunningAC = loading?.simulacionAC;
 
-  // ── Determinar botones AC/DC desde el netlist ─────────────────────────────
-  const modoFuentes = netlist
-    .filter((n) => n.type === 'fuente_voltaje' || n.type === 'fuente_corriente')
-    .map((n) => n.params?.dcOrAc?.toLowerCase());
-
-  const mostrarDC = modoFuentes.some((m) => m === 'dc');
-  const mostrarAC = modoFuentes.some((m) => m === 'ac');
-  // ──────────────────────────────────────────────────────────────────────────
+  // Botones AC/DC visibles segun las fuentes presentes en la netlist
+  const mostrarDC = c.tieneDC;
+  const mostrarAC = c.tieneAC;
 
   const metrics = [
     { val: voltage    ? `${voltage}V`    : '—', label: 'Voltaje'     },
@@ -101,7 +84,6 @@ export function Simulator({ state, dispatch, api }) {
 
   return (
     <div className="page-container">
-      {/* Nav */}
       <nav className="sim-nav">
         <button className="nav-back" onClick={() => dispatch('GO_LIBRARY')}>
           ← Volver a Circuitos
@@ -119,9 +101,9 @@ export function Simulator({ state, dispatch, api }) {
           <div className="sim-panel p-5">
             <div className="circuit-header">
               <span className="circuit-icon">⚡</span>
-              <span className="circuit-name">{norm.name}</span>
-              {norm.difficulty && (
-                <span className={`status-pill ${diffClass}`}>{norm.difficulty}</span>
+              <span className="circuit-name">{c.nombre}</span>
+              {c.dificultad && (
+                <span className={`status-pill ${diffClass}`}>{c.dificultad}</span>
               )}
             </div>
 
@@ -151,40 +133,55 @@ export function Simulator({ state, dispatch, api }) {
               </button>
             </div>
 
-            {/* Controles de simulacion via API — solo botones que corresponden */}
+            {/* Controles de simulacion via API */}
             {netlist.length > 0 && (mostrarDC || mostrarAC) && (
-              <div className="sim-controls" style={{ marginTop: 8 }}>
-                {mostrarDC && (
-                  <button
-                    className="control-btn primary"
-                    onClick={() => api.simularDC()}
-                    disabled={isRunningDC}
-                  >
-                    {isRunningDC ? '⏳ Simulando…' : '⚡ Simular DC'}
-                  </button>
-                )}
-                {mostrarAC && (
-                  <button
-                    className="control-btn"
-                    onClick={() =>
-                      api.simularAC({
-                        configuracion_ac: {
-                          f_inicial: 10,
-                          f_final: 100000,
-                          puntos: 50,
-                          barrido: 'log',
-                        },
-                      })
-                    }
-                    disabled={isRunningAC}
-                  >
-                    {isRunningAC ? '⏳ Simulando…' : '∿ Simular AC'}
-                  </button>
+              <div style={{ marginTop: 8 }}>
+                <div className="sim-controls">
+                  {mostrarDC && (
+                    <button
+                      className="control-btn primary"
+                      onClick={() => api.simularDC()}
+                      disabled={!isActive || isRunningDC}
+                    >
+                      {isRunningDC ? '⏳ Simulando…' : '⚡ Simular DC'}
+                    </button>
+                  )}
+                  {mostrarAC && (
+                    <button
+                      className="control-btn"
+                      onClick={() =>
+                        api.simularAC({
+                          configuracion_ac: {
+                            f_inicial: 10,
+                            f_final: 100000,
+                            puntos: 50,
+                            barrido: 'log',
+                          },
+                        })
+                      }
+                      disabled={!isActive || isRunningAC}
+                    >
+                      {isRunningAC ? '⏳ Simulando…' : '∿ Simular AC'}
+                    </button>
+                  )}
+                </div>
+
+                {!isActive && (
+                  <p style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    color: '#fbbf24',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}>
+                    <span>⚠</span>
+                    Primero debes energizar el circuito presionando <strong>▶ Iniciar</strong>
+                  </p>
                 )}
               </div>
             )}
 
-            {/* Error de simulacion */}
             {simError && (
               <div
                 style={{
@@ -209,9 +206,9 @@ export function Simulator({ state, dispatch, api }) {
               <span className="desc-header-text">Descripción</span>
             </div>
             <p className="circuit-desc">
-              {norm.desc
-                ? norm.desc
-                : `Circuito ${(c.type ?? '').toLowerCase()} — ${norm.topic} · ${norm.unit}`}
+              {c.descripcion
+                ? c.descripcion
+                : `Circuito — ${c.unidad_tematica} · ${c.materia}`}
             </p>
 
             <div className="metric-grid">
@@ -258,7 +255,6 @@ export function Simulator({ state, dispatch, api }) {
               </div>
             )}
 
-            {/* Resultado AC — resumen */}
             {simResultadoAC && Array.isArray(simResultadoAC) && (
               <div
                 style={{
@@ -295,7 +291,7 @@ export function Simulator({ state, dispatch, api }) {
             </div>
 
             {activeTab === 'graficas' ? (
-              <WaveformChart circuit={c} isActive={isActive} acData={simResultadoAC} />
+              <WaveformChart circuit={c} isActive={isActive} acData={simResultadoAC} dcData={simResultadoDC} />
             ) : (
               <div className="accordions">
                 <AccordionSection id="nodal" title="Análisis Nodal/Mallas DC" icon="⚡" state={state} dispatch={dispatch}>
@@ -308,10 +304,10 @@ export function Simulator({ state, dispatch, api }) {
 
                 <AccordionSection id="transitorio" title="Análisis Transitorio" icon="∿" state={state} dispatch={dispatch}>
                   <div className="analysis-content">
-                    <p>Tiempo de subida: {((c.R ?? 0) * 0.23).toFixed(1)}ms</p>
-                    <p>Tiempo de establecimiento: {((c.R ?? 0) * 0.42).toFixed(1)}ms</p>
-                    <p>Sobrepaso: {((c.C ?? 0) * 1.3 + 2).toFixed(1)}%</p>
-                    <p>Constante de tiempo: τ = {((c.R ?? 0) * (c.C ?? 0) * 0.1).toFixed(3)}ms</p>
+                    <p>Tiempo de subida: {(c.componentCounts.R * 0.23).toFixed(1)}ms</p>
+                    <p>Tiempo de establecimiento: {(c.componentCounts.R * 0.42).toFixed(1)}ms</p>
+                    <p>Sobrepaso: {(c.componentCounts.C * 1.3 + 2).toFixed(1)}%</p>
+                    <p>Constante de tiempo: τ = {(c.componentCounts.R * c.componentCounts.C * 0.1).toFixed(3)}ms</p>
                   </div>
                 </AccordionSection>
 
@@ -362,7 +358,6 @@ export function Simulator({ state, dispatch, api }) {
           </div>
         </div>
 
-        {/* Sidebar */}
         <SimulatorSidebar circuit={c} simStatus={simStatus} simTime={simTime} netlist={netlist} />
       </div>
     </div>

@@ -1,16 +1,9 @@
-/**
- * CircuitosService — Dominio: circuitos
- * Cubre los endpoints:
- *   GET /api/circuitos/filtros
- *   GET /api/circuitos
- *   GET /api/circuitos/:id
- */
-
 import { apiClient } from './apiClient';
+import { Circuit }   from '../../domain';
 
 /**
  * Obtiene las opciones disponibles para los filtros de la biblioteca.
- * @returns {Promise<{ temas, componentes, dificultades, materias }>}
+ * @returns {Promise<{ temas: string[], componentes: string[], dificultades: string[], materias: string[] }>}
  */
 async function getFiltros() {
   const res = await apiClient.get('/api/circuitos/filtros');
@@ -19,13 +12,15 @@ async function getFiltros() {
 
 /**
  * Busca circuitos con filtros opcionales.
- * @param {object} params
+ * Devuelve Circuit[] (no JSON).
+ *
+ * @param {object} [params]
  * @param {string} [params.nombreBusqueda]
  * @param {string} [params.dificultad]
  * @param {string} [params.materia]
  * @param {string} [params.tema]
  * @param {string[]} [params.componentes]
- * @returns {Promise<Array>}
+ * @returns {Promise<Circuit[]>}
  */
 async function getCircuitos(params = {}) {
   const query = new URLSearchParams();
@@ -39,19 +34,22 @@ async function getCircuitos(params = {}) {
     params.componentes.forEach((c) => query.append('componentes[]', c));
   }
 
-  const qs = query.toString();
+  const qs  = query.toString();
   const res = await apiClient.get(`/api/circuitos${qs ? `?${qs}` : ''}`);
-  return res.data;
+  const arr = Array.isArray(res.data) ? res.data : [];
+  return arr.map(Circuit.fromApiList);
 }
 
 /**
  * Obtiene un circuito completo por ID, incluyendo su netlist.
+ * Devuelve un Circuit (no JSON envuelto).
+ *
  * @param {number|string} id
- * @returns {Promise<{ circuito: object, netlist: Array }>}
+ * @returns {Promise<Circuit>}
  */
 async function getCircuitoById(id) {
   const res = await apiClient.get(`/api/circuitos/${id}`);
-  return res.data;
+  return Circuit.fromApiDetail(res.data);
 }
 
 export const CircuitosService = { getFiltros, getCircuitos, getCircuitoById };

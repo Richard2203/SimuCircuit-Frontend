@@ -1,13 +1,7 @@
-/**
- * ComponentesService — Dominio: componentes
- * Cubre el endpoint:
- *   GET /api/componentes
- */
-
 import { apiClient } from './apiClient';
 
 /**
- * Obtiene el catálogo completo de componentes disponibles.
+ * Obtiene el catalogo completo de componentes disponibles.
  * @returns {Promise<{ total: number, data: Array }>}
  */
 async function getComponentes() {

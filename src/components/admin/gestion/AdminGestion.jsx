@@ -42,7 +42,7 @@ export function AdminGestion({ adminActual }) {
     } finally { setLoading(false); }
   }
 
-  /* ── Acciones ──────────────────────────────── */
+  /*---- Acciones -------------------------------------------------*/
   async function handleAgregar(e) {
     e.preventDefault();
     setErrNuevo(''); setOkNuevo('');
@@ -171,7 +171,7 @@ export function AdminGestion({ adminActual }) {
   );
 }
 
-/* ── Sub-componentes ─────────────────────────── */
+/* --- Sub-componentes ------------------------------------ */
 
 function TablaAdmins({ admins, adminActualId, onEditar, onEliminar }) {
   if (admins.length === 0) {

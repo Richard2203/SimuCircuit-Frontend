@@ -1,25 +1,36 @@
 import { useEffect, useState, useRef } from 'react';
-import { CircuitSVG } from '../../utils/circuitSVG';
+import { CircuitSVG }         from '../../utils/circuitSVG';
 import { getDifficultyClass } from '../../utils/difficulty';
-import { CircuitosService } from '../../services';
+import { CircuitosService }   from '../../services';
+import { Circuit }            from '../../domain';
 
-
-//Cache en memoria de circuitos completos (con netlist).
+/**
+ * Cache de circuitos completos (con netlist) en memoria.
+ * Clave: id numerico del circuito.
+ * @type {Map<number, Circuit>}
+ */
 const circuitDetailCache = new Map();
 
-// Promesas en vuelo, para evitar disparar la misma peticion dos veces 
+/**
+ * Promesas en vuelo para evitar disparar la misma peticion dos veces.
+ * @type {Map<number, Promise<Circuit>>}
+ */
 const inflightRequests = new Map();
 
+/**
+ * Pide el detalle de un circuito al backend (con cache + de-duplicacion).
+ * @param {number} id
+ * @returns {Promise<Circuit>}
+ */
 async function fetchCircuitDetail(id) {
   if (circuitDetailCache.has(id)) return circuitDetailCache.get(id);
   if (inflightRequests.has(id))   return inflightRequests.get(id);
 
   const promise = (async () => {
     try {
-      const data = await CircuitosService.getCircuitoById(id);
-      const merged = { ...(data.circuito ?? {}), netlist: data.netlist ?? [] };
-      circuitDetailCache.set(id, merged);
-      return merged;
+      const circuit = await CircuitosService.getCircuitoById(id);
+      circuitDetailCache.set(id, circuit);
+      return circuit;
     } finally {
       inflightRequests.delete(id);
     }
@@ -29,41 +40,26 @@ async function fetchCircuitDetail(id) {
   return promise;
 }
 
-
- // Normaliza un circuito independientemente de si viene del dataset local
- // o de la API (/api/circuitos).
-function normalizar(circuit) {
-  return {
-    id:         circuit.id,
-    name:       circuit.name ?? circuit.nombre ?? circuit.nombre_circuito ?? '—',
-    difficulty: circuit.difficulty ?? circuit.dificultad ?? '',
-    unit:       circuit.unit ?? circuit.materia ?? '',
-    topic:      circuit.topic ?? circuit.unidad_tematica ?? '',
-    miniaturasvg: circuit.miniatura_svg ?? null,
-    _raw: circuit,
-  };
-}
-
-function isRealInlineSvg(svgString) {
-  if (!svgString || typeof svgString !== 'string') return false;
-  const trimmed = svgString.trim();
-  if (trimmed === '<svg>...</svg>') return false;
-  return trimmed.length > 30 && trimmed.includes('<svg');
-}
-
+/**
+ * CircuitCard — Tarjeta visual de un circuito en la biblioteca.
+ *
+ * @param {{ circuit: Circuit, onSelect: (c: Circuit) => void }} props
+ */
 export function CircuitCard({ circuit, onSelect }) {
-  const c        = normalizar(circuit);
-  const diffClass = getDifficultyClass(c.difficulty);
+  // Defensa por si llega JSON crudo
+  const c = circuit instanceof Circuit ? circuit : Circuit.fromAny(circuit);
 
-  const apiId       = typeof c.id === 'number' ? c.id : null;
-  const hasInlineSvg = isRealInlineSvg(c.miniaturasvg);
-  const hasNetlist   = Array.isArray(circuit.netlist) && circuit.netlist.length > 0;
+  const diffClass    = getDifficultyClass(c.dificultad);
+  const apiId        = typeof c.id === 'number' ? c.id : null;
+  const hasInlineSvg = c.tieneMiniaturaSvgReal;
+  const hasNetlist   = c.netlist.length > 0;
 
+  // Detalle ya cacheado al montar (si existe)
   const initial = !hasInlineSvg && !hasNetlist && apiId && circuitDetailCache.has(apiId)
     ? circuitDetailCache.get(apiId)
     : null;
 
-  const [detailed, setDetailed] = useState(initial);
+  const [detailed,     setDetailed]     = useState(initial);
   const [loadingThumb, setLoadingThumb] = useState(false);
   const cancelled = useRef(false);
 
@@ -86,29 +82,27 @@ export function CircuitCard({ circuit, onSelect }) {
       });
 
     return () => { cancelled.current = true; };
-  }, [apiId]);
+  }, [apiId, hasInlineSvg, hasNetlist, detailed]);
 
-  const circuitForRender = detailed ?? circuit;
+  const circuitForRender = detailed ?? c;
 
   return (
     <div
       className="circuit-card sim-panel"
-      onClick={() => onSelect(c._raw)}
+      onClick={() => onSelect(c)}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onSelect(c._raw)}
-      aria-label={`Seleccionar ${c.name}`}
+      onKeyDown={(e) => e.key === 'Enter' && onSelect(c)}
+      aria-label={`Seleccionar ${c.nombre}`}
     >
       {/* Preview del circuito */}
       <div className="card-preview">
         {hasInlineSvg ? (
-          /* SVG inline real proveniente de la API */
           <div
             style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            dangerouslySetInnerHTML={{ __html: c.miniaturasvg }}
+            dangerouslySetInnerHTML={{ __html: c.miniatura_svg }}
           />
         ) : loadingThumb ? (
-          /* Mini-spinner mientras llega la netlist */
           <div style={{
             width: 22, height: 22,
             border: '2px solid var(--border)',
@@ -117,18 +111,17 @@ export function CircuitCard({ circuit, onSelect }) {
             animation: 'spin 0.8s linear infinite',
           }} />
         ) : (
-          /* Componente SVG local, NetlistRenderer o placeholder */
           <CircuitSVG circuit={circuitForRender} preview={true} />
         )}
       </div>
 
       <div className="card-body">
-        <div className="card-title">{c.name}</div>
+        <div className="card-title">{c.nombre}</div>
         <div className="card-meta">
-          {[c.topic, c.unit].filter(Boolean).join(' · ')}
+          {[c.unidad_tematica, c.materia].filter(Boolean).join(' · ')}
         </div>
-        {c.difficulty && (
-          <span className={`status-pill ${diffClass}`}>{c.difficulty}</span>
+        {c.dificultad && (
+          <span className={`status-pill ${diffClass}`}>{c.dificultad}</span>
         )}
       </div>
     </div>

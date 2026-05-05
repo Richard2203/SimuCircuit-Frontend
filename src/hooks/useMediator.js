@@ -9,9 +9,9 @@ import eventBus from '../core/EventBus';
  * reacciona automáticamente a cambios globales.
  *
  * Expone:
- *   - state   → estado actual del Mediator
- *   - dispatch → acciones síncronas
- *   - api     → operaciones asíncronas que van al servidor
+ *   - state   -> estado actual del Mediator
+ *   - dispatch -> acciones síncronas
+ *   - api     -> operaciones asíncronas que van al servidor
  *
  * @returns {{ state: object, dispatch: Function, api: object }}
  */
@@ -33,10 +33,10 @@ export function useMediator() {
   }, []);
 
   /**
-   * Métodos asíncronos que pasan por el Mediator (nunca directamente a los servicios).
+   * Metodos asincronos que pasan por el Mediator (nunca directamente a los servicios).
    * Los componentes llaman a api.simularDC() en lugar de SimulacionService.simularDC().
    *
-   * IMPORTANTE: cada función se memoiza con useCallback (dependencias vacías porque
+   * IMPORTANTE: cada funcion se memoiza con useCallback (dependencias vacias porque
    * mediator es un singleton estable), y luego el objeto api completo se envuelve
    * en useMemo. Esto garantiza que la referencia del objeto sea estable entre renders,
    * evitando que useEffect([api]) se dispare en bucle infinito.

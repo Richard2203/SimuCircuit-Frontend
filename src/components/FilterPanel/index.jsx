@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import {
-  DIFFICULTIES, UNITS, TOPICS_BY_UNIT, CIRCUIT_TYPES
+  DIFFICULTIES, UNITS, TOPICS_BY_UNIT, CIRCUIT_TYPES, COMPONENTS_LIST,
 } from '../../data/circuits';
 
 /**
- * FilterPanel — Panel de filtros de la biblioteca - Se aplica en el cliente sin consultar backend
+ * FilterPanel — Panel de filtros de la biblioteca
  *
  * @param {{
  *   filters:    object,
@@ -12,13 +12,11 @@ import {
  *   dispatch:   Function,
  * }} props
  */
-export function FilterPanel({ filters, filtrosApi, dispatch, componentesCatalogo }) {
+export function FilterPanel({ filters, filtrosApi, dispatch }) {
   // Opciones: API cuando disponible, fallback a constantes locales
   const dificultades = filtrosApi?.dificultades ?? DIFFICULTIES;
   const materias     = filtrosApi?.materias     ?? UNITS;
-  const componentes = componentesCatalogo?.length > 0
-  ? componentesCatalogo.map(c => c.tipo)
-  : [];
+  const componentes  = COMPONENTS_LIST;
 
   // Temas: si la API los tiene como arreglo plano, usarlos directo;
   // si no, caer al mapa local por unidad
@@ -27,7 +25,7 @@ export function FilterPanel({ filters, filtrosApi, dispatch, componentesCatalogo
     ? temasApi
     : (filters.unit ? TOPICS_BY_UNIT[filters.unit] || [] : []);
 
-  // Si se cambia la unidad y el tema actual ya no es válido, limpiarlo
+  // Si se cambia la unidad y el tema actual ya no es valido, limpiarlo
   useEffect(() => {
     if (filters.topic && !temasApi && filters.unit) {
       const validTopics = TOPICS_BY_UNIT[filters.unit] || [];
@@ -71,7 +69,7 @@ export function FilterPanel({ filters, filtrosApi, dispatch, componentesCatalogo
 
   return (
     <div className="filter-panel">
-      {/* Búsqueda */}
+      {/* Busqueda */}
       <div className="filter-search-wrap">
         <label className="filter-label">Buscar por nombre</label>
         <input
@@ -127,7 +125,7 @@ export function FilterPanel({ filters, filtrosApi, dispatch, componentesCatalogo
         </div>
       </div>
 
-      {/* Acciones — solo limpiar, el filtrado es instantáneo */}
+      {/* Acciones — solo limpiar, el filtrado es instantaneo */}
       <div className="filter-actions">
         <button
           className="control-btn"

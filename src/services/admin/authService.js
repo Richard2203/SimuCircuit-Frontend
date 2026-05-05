@@ -11,7 +11,7 @@
 
 import { setAuthToken, clearAuthToken } from '../simulator/apiClient';
 
-/* ── Mock de credenciales validas       */
+/* --- Mock de credenciales validas       */
 
 const CREDS_KEY = 'admin_mock_credentials';
 
@@ -52,7 +52,7 @@ function generarTokenFake(admin) {
   return `${base64UrlEncode(header)}.${base64UrlEncode(payload)}.${sig}`;
 }
 
-/* ── API ──────────────────────────────────────────────────── */
+/* ---- API -------------------------------------------------- */
 
 /**
  * Inicia sesion de administrador.

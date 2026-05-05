@@ -32,7 +32,7 @@ function applyFilters(circuits, filters) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Dataset de prueba — independiente de ALL_CIRCUITS para aislar la logica
+// Dataset de prueba
 const MOCK_CIRCUITS = [
   {
     id: 'una-malla',

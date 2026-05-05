@@ -1,15 +1,19 @@
 import { useEffect } from 'react';
+import { Circuit } from '../../../domain';
 
 /**
  * PanelListaCircuitos — Panel deslizante con la lista de circuitos existentes.
  *
+ * Recibe `Circuit[]` (instancias). Las tarjetas internas usan los campos
+ * canonicos (`nombre`, `descripcion`, `dificultad`, `miniatura_svg`).
+ *
  * @param {{
  *   abierto: boolean,
- *   circuitos: Array,
+ *   circuitos: Circuit[],
  *   loading: boolean,
  *   onCerrar: () => void,
- *   onEditar: (circuito) => void,
- *   onEliminar: (circuito) => void,
+ *   onEditar: (c: Circuit) => void,
+ *   onEliminar: (c: Circuit) => void,
  * }} props
  */
 export function PanelListaCircuitos({ abierto, circuitos = [], loading, onCerrar, onEditar, onEliminar }) {
@@ -41,14 +45,18 @@ export function PanelListaCircuitos({ abierto, circuitos = [], loading, onCerrar
           ) : circuitos.length === 0 ? (
             <p className="admin-panel-list__empty">No hay circuitos aún. Crea el primero con el botón "+ Nuevo".</p>
           ) : (
-            circuitos.map((c) => (
-              <CardCircuito
-                key={c.id}
-                circuito={c}
-                onEditar={() => onEditar(c)}
-                onEliminar={() => onEliminar(c)}
-              />
-            ))
+            circuitos.map((c) => {
+              // Defensa: si llega JSON crudo (estado obsoleto), normalizar.
+              const circuit = c instanceof Circuit ? c : Circuit.fromAny(c);
+              return (
+                <CardCircuito
+                  key={circuit.id}
+                  circuito={circuit}
+                  onEditar={() => onEditar(circuit)}
+                  onEliminar={() => onEliminar(circuit)}
+                />
+              );
+            })
           )}
         </div>
       </aside>
@@ -60,16 +68,16 @@ export function PanelListaCircuitos({ abierto, circuitos = [], loading, onCerrar
  * CardCircuito — Tarjeta individual con miniatura, nombre, descripcion y acciones.
  *
  * @param {{
- *   circuito: { id, nombre_circuito, descripcion, dificultad, miniatura_svg },
+ *   circuito: Circuit,
  *   onEditar: () => void,
  *   onEliminar: () => void,
  * }} props
  */
 export function CardCircuito({ circuito, onEditar, onEliminar }) {
-  const { nombre_circuito, descripcion, dificultad, miniatura_svg } = circuito;
+  const c = circuito instanceof Circuit ? circuito : Circuit.fromAny(circuito);
 
   const badgeClass = (() => {
-    switch (dificultad) {
+    switch (c.dificultad) {
       case 'Básico':     return 'admin-circuit-card__badge--basico';
       case 'Intermedio': return 'admin-circuit-card__badge--intermedio';
       case 'Avanzado':   return 'admin-circuit-card__badge--avanzado';
@@ -80,8 +88,8 @@ export function CardCircuito({ circuito, onEditar, onEliminar }) {
   return (
     <article className="admin-circuit-card">
       <div className="admin-circuit-card__thumb">
-        {miniatura_svg && miniatura_svg !== '<svg>...</svg>' ? (
-          <div dangerouslySetInnerHTML={{ __html: miniatura_svg }} />
+        {c.tieneMiniaturaSvgReal ? (
+          <div dangerouslySetInnerHTML={{ __html: c.miniatura_svg }} />
         ) : (
           <span style={{ fontSize: 9, color: 'var(--text-hint)' }}>SVG</span>
         )}
@@ -89,12 +97,12 @@ export function CardCircuito({ circuito, onEditar, onEliminar }) {
 
       <div className="admin-circuit-card__body">
         <div className="admin-circuit-card__top">
-          <h4 className="admin-circuit-card__name">{nombre_circuito}</h4>
-          {dificultad && (
-            <span className={`admin-circuit-card__badge ${badgeClass}`}>{dificultad}</span>
+          <h4 className="admin-circuit-card__name">{c.nombre}</h4>
+          {c.dificultad && (
+            <span className={`admin-circuit-card__badge ${badgeClass}`}>{c.dificultad}</span>
           )}
         </div>
-        <p className="admin-circuit-card__desc">{descripcion}</p>
+        <p className="admin-circuit-card__desc">{c.descripcion}</p>
         <div className="admin-circuit-card__actions">
           <button className="admin-icon-btn"                          onClick={onEditar}   title="Editar"><PencilIcon /></button>
           <button className="admin-icon-btn admin-icon-btn--danger"   onClick={onEliminar} title="Eliminar"><TrashIcon /></button>

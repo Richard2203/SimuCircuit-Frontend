@@ -1,16 +1,9 @@
-/**
- * SimulacionService — Dominio: simulación
- * Cubre los endpoints:
- *   POST /api/simular/dc
- *   POST /api/simular/ac
- */
-
 import { apiClient } from './apiClient';
 
 /**
  * Valida que una netlist sea un arreglo con al menos un componente.
  * @param {Array} netlist
- * @throws {Error} si la netlist no es válida
+ * @throws {Error} si la netlist no es valida
  */
 function validarNetlist(netlist) {
   if (!Array.isArray(netlist) || netlist.length === 0) {
@@ -19,7 +12,40 @@ function validarNetlist(netlist) {
 }
 
 /**
- * Ejecuta un análisis DC sobre la netlist dada.
+ * Transforma la respuesta cruda del backend AC al formato que consume WaveformChart. *
+ * @param {object} raw — respuesta cruda de /api/simular/ac
+ * @returns {Array}
+ */
+function transformarAC(raw) {
+  const { phasorVoltages = {}, phasorCurrents = {}, frequencySweep = [] } = raw;
+
+  return frequencySweep.map((freq, idx) => {
+    const voltages = {};
+    for (const [nodo, fasores] of Object.entries(phasorVoltages)) {
+      const fasor = fasores[idx] ?? { re: 0, im: 0 };
+      const re  = fasor.re  ?? fasor[0] ?? 0;
+      const im  = fasor.im  ?? fasor[1] ?? 0;
+      const magnitud = Math.sqrt(re * re + im * im);
+      const fase     = (Math.atan2(im, re) * 180) / Math.PI;
+      voltages[nodo] = { magnitud, fase, re, im };
+    }
+
+    const currents = {};
+    for (const [comp, fasores] of Object.entries(phasorCurrents)) {
+      const fasor = fasores[idx] ?? { re: 0, im: 0 };
+      const re  = fasor.re  ?? fasor[0] ?? 0;
+      const im  = fasor.im  ?? fasor[1] ?? 0;
+      const magnitud = Math.sqrt(re * re + im * im);
+      const fase     = (Math.atan2(im, re) * 180) / Math.PI;
+      currents[comp] = { magnitud, fase, re, im };
+    }
+
+    return { frecuencia: freq, voltages, currents };
+  });
+}
+
+/**
+ * Ejecuta un analisis DC sobre la netlist dada.
  * @param {object} params
  * @param {Array}  params.netlist
  * @param {string} [params.nombre_circuito]
@@ -36,7 +62,10 @@ async function simularDC({ netlist, nombre_circuito } = {}) {
 }
 
 /**
- * Ejecuta un análisis AC en barrido de frecuencia.
+ * Ejecuta un analisis AC en barrido de frecuencia.
+ * Devuelve el resultado ya transformado al formato que consume WaveformChart:
+ *   Array de { frecuencia, voltages: { nodo: { magnitud, fase, re, im } } }
+ *
  * @param {object} params
  * @param {Array}  params.netlist
  * @param {object} params.configuracion_ac
@@ -45,7 +74,7 @@ async function simularDC({ netlist, nombre_circuito } = {}) {
  * @param {number} params.configuracion_ac.puntos
  * @param {string} params.configuracion_ac.barrido - "log" | "lineal"
  * @param {string} [params.nombre_circuito]
- * @returns {Promise<Array>} - Arreglo de puntos { frecuencia, voltages }
+ * @returns {Promise<Array>} — Array de { frecuencia, voltages, currents }
  */
 async function simularAC({ netlist, configuracion_ac, nombre_circuito } = {}) {
   validarNetlist(netlist);
@@ -66,7 +95,13 @@ async function simularAC({ netlist, configuracion_ac, nombre_circuito } = {}) {
   if (nombre_circuito) body.nombre_circuito = nombre_circuito;
 
   const res = await apiClient.post('/api/simular/ac', body);
-  return res.data;
+
+  // se detecta si res.data viene en formato crudo del backend (phasorVoltages + frequencySweep)
+  // o ya en el formato transformado (array de { frecuencia, voltages }).
+  const data = res.data;
+  if (Array.isArray(data)) return data;                  // ya transformado
+  if (data?.frequencySweep) return transformarAC(data);  // formato crudo del backend
+  return [];
 }
 
 export const SimulacionService = { simularDC, simularAC };

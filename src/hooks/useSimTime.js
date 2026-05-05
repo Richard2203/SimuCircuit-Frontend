@@ -3,7 +3,7 @@ import eventBus from '../core/EventBus';
 
 /**
  * useSimTime — Hook Observer dedicado al timer
- * Se suscribe únicamente al evento SIM_TICK para actualizar
+ * Se suscribe unicamente al evento SIM_TICK para actualizar
  * el tiempo de simulación sin re-renderizar toda la app.
  *
  * @returns {number} Segundos transcurridos

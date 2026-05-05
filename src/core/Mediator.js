@@ -3,35 +3,38 @@ import { CircuitosService }   from '../services/simulator/CircuitosService';
 import { ComponentesService } from '../services/simulator/ComponentesService';
 import { SimulacionService }  from '../services/simulator/SimulacionService';
 import { TeoremasService }    from '../services/simulator/TeoremasService';
+import { Circuit }            from '../domain';
 
 /**
  * SimuCircuitMediator — Pattern: Mediator
- * Hub central que coordina toda la comunicación entre componentes.
- * Ningún componente se habla directamente con otro; todo pasa por aquí.
+ * Hub central que coordina toda la comunicacion entre componentes.
  *
  * Eventos publicados al bus:
- *  - STATE_CHANGED        → cuando el estado global cambia
- *  - SIM_TICK             → cada segundo mientras la simulación está activa
- *  - circuito:cargado     → cuando se carga el detalle + netlist de un circuito
- *  - filtros:actualizados → cuando se obtienen filtros desde la API
- *  - simulacion:iniciada  → justo antes de llamar a la API de simulación
- *  - simulacion:completada→ cuando la API devuelve resultados
- *  - simulacion:error     → si la API devuelve un error
+ *   - STATE_CHANGED        -> cuando el estado global cambia
+ *   - SIM_TICK             -> cada segundo mientras la simulacion esta activa
+ *   - circuito:cargado     -> cuando se carga el detalle + netlist de un circuito
+ *   - filtros:actualizados -> cuando se obtienen filtros desde la API
+ *   - simulacion:iniciada  -> justo antes de llamar a la API de simulacion
+ *   - simulacion:completada-> cuando la API devuelve resultados
+ *   - simulacion:error     → si la API devuelve un error
  */
 
 const INITIAL_STATE = {
   view: 'library',            // 'library' | 'simulator'
+  /** @type {Circuit|null} */
   selectedCircuit: null,
-  netlist: [],                // netlist activa del circuito seleccionado
+  /** @type {import('../domain').Component[]} */
+  netlist: [],                // espejo de selectedCircuit.netlist (compat)
   simStatus: 'detenido',      // 'detenido' | 'activo' | 'pausado'
-  simTime: 0,                 // segundos transcurridos
-  simResultadoDC: null,       // último resultado DC
-  simResultadoAC: null,       // último resultado AC
-  simError: null,             // último error de simulación
-  filtrosApi: null,           // filtros obtenidos desde /api/circuitos/filtros
-  circuitosApi: [],           // circuitos obtenidos desde /api/circuitos
-  componentesCatalogo: [],    // catálogo de /api/componentes
-  teoremaResultado: null,     // último resultado de Thévenin/Norton o Superposición
+  simTime: 0,
+  simResultadoDC: null,
+  simResultadoAC: null,
+  simError: null,
+  filtrosApi: null,
+  /** @type {Circuit[]} */
+  circuitosApi: [],
+  componentesCatalogo: [],
+  teoremaResultado: null,
   filters: {
     search: '',
     difficulty: '',
@@ -40,9 +43,9 @@ const INITIAL_STATE = {
     type: '',
     components: [],
   },
-  activeTab: 'calcs',         // 'calcs' | 'graficas'
-  openAccordions: {},         // { [id]: boolean }
-  loading: {},                // { [key]: boolean } para estados de carga
+  activeTab: 'calcs',
+  openAccordions: {},
+  loading: {},
 };
 
 class SimuCircuitMediator {
@@ -50,34 +53,33 @@ class SimuCircuitMediator {
     this._bus = bus;
     this._state = {
       ...INITIAL_STATE,
-      filters:  { ...INITIAL_STATE.filters },
-      loading:  {},
+      filters: { ...INITIAL_STATE.filters },
+      loading: {},
     };
     this._timer = null;
   }
 
-  /** Retorna una copia superficial del estado actual */
+  /** Retorna una copia superficial del estado actual. */
   getState() {
     return { ...this._state };
   }
 
-  // ─── Punto de entrada síncrono ───────────────────────────────
+  // ─── Punto de entrada sincrono ───────────────────────────────
 
-  /**
-   * Punto de entrada único para todos los cambios de estado síncronos.
-   * Para operaciones asíncronas usar los métodos async del Mediator directamente.
-   * @param {string} action - Identificador de la acción
-   * @param {*} payload - Datos de la acción
-   */
   dispatch(action, payload) {
     switch (action) {
 
-      case 'SELECT_CIRCUIT':
+      case 'SELECT_CIRCUIT': {
+        // Aceptar tanto un Circuit como JSON crudo (compat con datasets locales).
+        const circuit = payload instanceof Circuit
+          ? payload
+          : Circuit.fromAny(payload);
+
         this._stopTimer();
         this._state = {
           ...this._state,
-          selectedCircuit: payload,
-          netlist: payload?.netlist ?? [],
+          selectedCircuit: circuit,
+          netlist: circuit?.netlist ?? [],
           view: 'simulator',
           simStatus: 'detenido',
           simTime: 0,
@@ -88,6 +90,7 @@ class SimuCircuitMediator {
           openAccordions: {},
         };
         break;
+      }
 
       case 'GO_LIBRARY':
         this._stopTimer();
@@ -150,9 +153,15 @@ class SimuCircuitMediator {
         };
         break;
 
-      case 'SET_NETLIST':
-        this._state.netlist = payload;
+      case 'SET_NETLIST': {
+        // payload es un Component[] o JSON crudo. 
+        const newNetlist = payload ?? [];
+        this._state.netlist = newNetlist;
+        if (this._state.selectedCircuit) {
+          this._state.selectedCircuit = this._state.selectedCircuit.withNetlist(newNetlist);
+        }
         break;
+      }
 
       default:
         console.warn(`[Mediator] Acción desconocida: ${action}`);
@@ -162,12 +171,8 @@ class SimuCircuitMediator {
     this._bus.publish('STATE_CHANGED', this.getState());
   }
 
-  // ─── Operaciones asíncronas (API) ────────────────────────────
+  // ─── Operaciones asincronas (API) ────────────────────────────
 
-  /**
-   * Carga los filtros disponibles desde la API y actualiza el estado.
-   * Publica: filtros:actualizados
-   */
   async cargarFiltros() {
     this._setLoading('filtros', true);
     try {
@@ -183,14 +188,14 @@ class SimuCircuitMediator {
   }
 
   /**
-   * Busca circuitos en la API según los filtros activos.
-   * @param {object} [params] - Parámetros de búsqueda opcionales
+   * Busca circuitos en la API segun los filtros activos. 
+   * @param {object} [params] - Parametros de busqueda opcionales
    */
   async buscarCircuitos(params = {}) {
     this._setLoading('circuitos', true);
     try {
       const circuitosApi = await CircuitosService.getCircuitos(params);
-      this._state.circuitosApi = circuitosApi;
+      this._state.circuitosApi = circuitosApi;   // Circuit[]
     } catch (err) {
       console.error('[Mediator] Error al buscar circuitos:', err);
       this._state.circuitosApi = [];
@@ -201,30 +206,29 @@ class SimuCircuitMediator {
   }
 
   /**
-   * Carga el detalle de un circuito por ID (incluye netlist) y cambia la vista.
-   * Publica: circuito:cargado
+   * Carga el detalle de un circuito por ID y cambia la vista.
    * @param {number|string} id
    */
   async cargarCircuito(id) {
     this._setLoading('circuito', true);
     try {
-      const { circuito, netlist } = await CircuitosService.getCircuitoById(id);
-      const circuitoConNetlist = { ...circuito, netlist };
+      /** @type {Circuit} */
+      const circuit = await CircuitosService.getCircuitoById(id);
       this._stopTimer();
       this._state = {
         ...this._state,
-        selectedCircuit: circuitoConNetlist,
-        netlist,
-        view: 'simulator',
-        simStatus: 'detenido',
-        simTime: 0,
-        simResultadoDC: null,
-        simResultadoAC: null,
-        simError: null,
+        selectedCircuit: circuit,
+        netlist:         circuit.netlist,
+        view:            'simulator',
+        simStatus:       'detenido',
+        simTime:         0,
+        simResultadoDC:  null,
+        simResultadoAC:  null,
+        simError:        null,
         teoremaResultado: null,
-        openAccordions: {},
+        openAccordions:  {},
       };
-      this._bus.publish('circuito:cargado', circuitoConNetlist);
+      this._bus.publish('circuito:cargado', circuit);
     } catch (err) {
       console.error('[Mediator] Error al cargar circuito:', err);
     } finally {
@@ -233,14 +237,10 @@ class SimuCircuitMediator {
     this._bus.publish('STATE_CHANGED', this.getState());
   }
 
-  /**
-   * Carga el catálogo de componentes desde la API.
-   */
   async cargarComponentes() {
     this._setLoading('componentes', true);
     try {
       const { data } = await ComponentesService.getComponentes();
-      console.log(JSON.stringify(data, null, 2));
       this._state.componentesCatalogo = data;
     } catch (err) {
       console.error('[Mediator] Error al cargar componentes:', err);
@@ -251,25 +251,30 @@ class SimuCircuitMediator {
   }
 
   /**
-   * Ejecuta la simulación DC. Coordina: validación → API → eventos.
-   * Publica: simulacion:iniciada, simulacion:completada | simulacion:error
-   * @param {object} [opciones]
-   * @param {string} [opciones.nombre_circuito]
-   * @param {Array}  [opciones.netlist] - Usa la netlist del estado si se omite
+   * Devuelve el nombre del circuito actual para enviar al backend de simulacion.
+   * @returns {string|undefined}
+   * @private
+   */
+  _nombreCircuitoActual() {
+    return this._state.selectedCircuit?.nombre;
+  }
+
+  /**
+   * Ejecuta la simulacion DC.
    */
   async simularDC(opciones = {}) {
-    const netlist = opciones.netlist ?? this._state.netlist;
-    const nombre_circuito =
-      opciones.nombre_circuito ??
-      this._state.selectedCircuit?.nombre_circuito ??
-      this._state.selectedCircuit?.nombre;
+    const netlistInstancias = opciones.netlist ?? this._state.netlist;
+    const netlistJSON = netlistInstancias.map((c) =>
+      typeof c?.toBackendJSON === 'function' ? c.toBackendJSON() : c
+    );
+    const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
 
-    this._bus.publish('simulacion:iniciada', { tipo: 'DC', netlist });
+    this._bus.publish('simulacion:iniciada', { tipo: 'DC', netlist: netlistJSON });
     this._setLoading('simulacionDC', true);
     this._state.simError = null;
 
     try {
-      const resultado = await SimulacionService.simularDC({ netlist, nombre_circuito });
+      const resultado = await SimulacionService.simularDC({ netlist: netlistJSON, nombre_circuito });
       this._state.simResultadoDC = resultado;
       this._bus.publish('simulacion:completada', { tipo: 'DC', resultado });
     } catch (err) {
@@ -283,27 +288,22 @@ class SimuCircuitMediator {
   }
 
   /**
-   * Ejecuta la simulación AC. Coordina: validación → API → eventos.
-   * Publica: simulacion:iniciada, simulacion:completada | simulacion:error
-   * @param {object} opciones
-   * @param {object} opciones.configuracion_ac
-   * @param {string} [opciones.nombre_circuito]
-   * @param {Array}  [opciones.netlist]
+   * Ejecuta la simulacion AC.
    */
   async simularAC(opciones = {}) {
-    const netlist = opciones.netlist ?? this._state.netlist;
-    const nombre_circuito =
-      opciones.nombre_circuito ??
-      this._state.selectedCircuit?.nombre_circuito ??
-      this._state.selectedCircuit?.nombre;
+    const netlistInstancias = opciones.netlist ?? this._state.netlist;
+    const netlistJSON = netlistInstancias.map((c) =>
+      typeof c?.toBackendJSON === 'function' ? c.toBackendJSON() : c
+    );
+    const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
 
-    this._bus.publish('simulacion:iniciada', { tipo: 'AC', netlist });
+    this._bus.publish('simulacion:iniciada', { tipo: 'AC', netlist: netlistJSON });
     this._setLoading('simulacionAC', true);
     this._state.simError = null;
 
     try {
       const resultado = await SimulacionService.simularAC({
-        netlist,
+        netlist: netlistJSON,
         configuracion_ac: opciones.configuracion_ac,
         nombre_circuito,
       });
@@ -319,19 +319,12 @@ class SimuCircuitMediator {
     this._bus.publish('STATE_CHANGED', this.getState());
   }
 
-  /**
-   * Calcula Thévenin/Norton para un componente de carga.
-   * @param {object} opciones
-   * @param {string} opciones.componenteCargaId
-   * @param {string} [opciones.nombre_circuito]
-   * @param {Array}  [opciones.netlist]
-   */
   async calcularTheveninNorton(opciones = {}) {
-    const netlist = opciones.netlist ?? this._state.netlist;
-    const nombre_circuito =
-      opciones.nombre_circuito ??
-      this._state.selectedCircuit?.nombre_circuito ??
-      this._state.selectedCircuit?.nombre;
+    const netlistInstancias = opciones.netlist ?? this._state.netlist;
+    const netlistJSON = netlistInstancias.map((c) =>
+      typeof c?.toBackendJSON === 'function' ? c.toBackendJSON() : c
+    );
+    const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
 
     this._setLoading('teorema', true);
     this._state.simError = null;
@@ -339,7 +332,7 @@ class SimuCircuitMediator {
     try {
       const resultado = await TeoremasService.calcularTheveninNorton({
         componenteCargaId: opciones.componenteCargaId,
-        netlist,
+        netlist: netlistJSON,
         nombre_circuito,
       });
       this._state.teoremaResultado = { tipo: 'thevenin-norton', ...resultado };
@@ -352,20 +345,12 @@ class SimuCircuitMediator {
     this._bus.publish('STATE_CHANGED', this.getState());
   }
 
-  /**
-   * Aplica el principio de superposición sobre un componente objetivo.
-   * @param {object} opciones
-   * @param {string} opciones.componenteObjetivoId
-   * @param {string} opciones.parametroAnalisis - "voltaje" | "corriente"
-   * @param {string} [opciones.nombre_circuito]
-   * @param {Array}  [opciones.netlist]
-   */
   async calcularSuperposicion(opciones = {}) {
-    const netlist = opciones.netlist ?? this._state.netlist;
-    const nombre_circuito =
-      opciones.nombre_circuito ??
-      this._state.selectedCircuit?.nombre_circuito ??
-      this._state.selectedCircuit?.nombre;
+    const netlistInstancias = opciones.netlist ?? this._state.netlist;
+    const netlistJSON = netlistInstancias.map((c) =>
+      typeof c?.toBackendJSON === 'function' ? c.toBackendJSON() : c
+    );
+    const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
 
     this._setLoading('teorema', true);
     this._state.simError = null;
@@ -374,7 +359,7 @@ class SimuCircuitMediator {
       const resultado = await TeoremasService.calcularSuperposicion({
         componenteObjetivoId: opciones.componenteObjetivoId,
         parametroAnalisis:    opciones.parametroAnalisis,
-        netlist,
+        netlist:              netlistJSON,
         nombre_circuito,
       });
       this._state.teoremaResultado = { tipo: 'superposicion', ...resultado };
@@ -408,10 +393,7 @@ class SimuCircuitMediator {
   }
 }
 
-// Singleton compartido
 const mediator = new SimuCircuitMediator(eventBus);
 export default mediator;
 
-
-// exportancia para pruebas unitarias y de integracion
 export { SimuCircuitMediator };

@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { RecuadroParametros } from '../shared/RecuadroParametros';
+import {
+  TIPOS_COMPONENTE as TIPOS_VALIDOS,
+  CANONICAL_PINS,
+  PREFIJOS,
+  RANGOS,
+  UNIDADES_VALIDAS,
+  ComponentFactory,
+  Component,
+} from '../../../domain';
 
+
+ // Lista de tipos para el <select>. 
 const TIPOS_COMPONENTE = [
   { value: 'resistencia',          label: 'Resistencia' },
   { value: 'resistencia_variable', label: 'Resistencia variable (potenciómetro)' },
@@ -14,11 +25,8 @@ const TIPOS_COMPONENTE = [
   { value: 'regulador_voltaje',    label: 'Regulador de voltaje' },
 ];
 
-/**
- * Configuración de pines (terminales) por tipo de componente.
- * key - dato JSON
- * label - dato usuario
- */
+
+// Pines visibles en el formulario, por tipo.
 const PINES_POR_TIPO = {
   resistencia: [
     { key: 'a', label: 'Nodo A (terminal izquierdo)' },
@@ -66,46 +74,16 @@ const PINES_POR_TIPO = {
   ],
 };
 
-/** Prefijos de designador por tipo (ID temporal visual) */
-const PREFIJO = {
-  resistencia: 'R', resistencia_variable: 'RV', fuente_voltaje: 'V',
-  fuente_corriente: 'I', capacitor: 'C', bobina: 'L',
-  diodo: 'D', transistor_bjt: 'Q', transistor_fet: 'J', regulador_voltaje: 'U',
-};
-
-/** Rangos de validación por tipo */
-const RANGOS = {
-  resistencia:          { min: 1,    max: 10_000_000, unit: 'Ω' },
-  resistencia_variable: { min: 1,    max: 10_000_000, unit: 'Ω' },
-  capacitor:            { min: 1e-12,max: 0.1,        unit: 'F' },
-  bobina:               { min: 1e-9, max: 100,        unit: 'H' },
-  fuente_voltaje:       { min: 0.1,  max: 500,        unit: 'V' },
-  fuente_corriente:     { min: 1e-6, max: 50,         unit: 'A' },
-  diodo:                { min: null, max: null,       unit: '' },
-  transistor_bjt:       { min: null, max: null,       unit: '' },
-  transistor_fet:       { min: null, max: null,       unit: '' },
-  regulador_voltaje:    { min: null, max: null,       unit: '' },
-};
-
 /** Multiplicadores SI */
 const SUFIJOS = { p: 1e-12, n: 1e-9, u: 1e-6, μ: 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9 };
 
-/** Validación de unidades */
-const UNIDADES_VALIDAS = {
-  resistencia:          ['Ω', 'OHM', 'OHMS'],
-  resistencia_variable: ['Ω', 'OHM', 'OHMS'],
-  capacitor:            ['F'],
-  bobina:               ['H'],
-  fuente_voltaje:       ['V'],
-  fuente_corriente:     ['A'],
-};
-
+/**
+ * Genera un designador unico (R1, V1, …) para un tipo dado.
+ * Reutiliza el helper centralizado de Component (mismo prefijo, mismo algoritmo).
+ */
 function generarId(tipo, lista) {
-  const pref = PREFIJO[tipo] ?? 'X';
-  let n = 1;
-  const ids = new Set(lista.map((c) => c.id));
-  while (ids.has(`${pref}${n}`)) n++;
-  return `${pref}${n}`;
+  if (!TIPOS_VALIDOS.includes(tipo)) return `X${lista.length + 1}`;
+  return Component.generarId(tipo, lista);
 }
 
 /** Devuelve un objeto vacio con las keys de los pines del tipo. */
@@ -114,7 +92,7 @@ function nodosVaciosPara(tipo) {
   return Object.fromEntries(pines.map((p) => [p.key, '']));
 }
 
-/** Ejemplos contextuales segun tipo de componente */
+/** Ejemplos contextuales por tipo. */
 function ejemploPorTipo(tipo) {
   switch (tipo) {
     case 'resistencia':
@@ -127,9 +105,7 @@ function ejemploPorTipo(tipo) {
   }
 }
 
-/**
- * Formatea el valor crudo a notacion de  ingenieria para feedback inmediato.
- */
+/** Formatea el valor crudo a notacion de ingenieria para feedback inmediato. */
 function formatearValorParaPreview(rawVal, tipo) {
   const parsed = parseValue(rawVal, tipo);
   if (parsed === null || typeof parsed === 'object') return '';
@@ -151,9 +127,7 @@ function formatearValorParaPreview(rawVal, tipo) {
   return `= ${num} ${prefix}${unit}`;
 }
 
-/**
- * parseValue — Acepta formatos como: "330", "11k", "11kΩ", "5V", "100mF", "2.2u"
- */
+/** parseValue — Acepta "330", "11k", "11kΩ", "5V", "100mF", "2.2u" */
 function parseValue(str, tipo) {
   if (!str) return null;
   const s = String(str).trim();
@@ -185,7 +159,7 @@ function validarValue(tipo, rawVal) {
   if (!rango || rango.min === null) return null;
 
   const parsed = parseValue(rawVal, tipo);
-  if (parsed === null) return 'Formato inválido. Ej: 330, 1k, 5m, 12V, 100uF';
+  if (parsed === null) return 'Formato invalido. Ej: 330, 1k, 5m, 12V, 100uF';
   if (typeof parsed === 'object' && parsed.__unidadInvalida) {
     return `Unidad "${parsed.__unidadInvalida}" no corresponde. Use ${parsed.esperada} u omítala.`;
   }
@@ -195,52 +169,41 @@ function validarValue(tipo, rawVal) {
   return null;
 }
 
-/** Parametros por defecto al cambiar de tipo */
+/** Parametros por defecto (delegamos a las defaults de cada subclase). */
 function defaultParams(tipo) {
-  switch (tipo) {
-    case 'resistencia':
-    case 'resistencia_variable':
-      return { banda_uno: 'Naranja', banda_dos: 'Naranja', banda_tres: 'Marrón', banda_tolerancia: 'Dorado', potencia_nominal: '0.25', isResistenciaVariable: tipo === 'resistencia_variable' ? 1 : 0, ...(tipo === 'resistencia_variable' ? { cursor_pos: 50 } : {}) };
-    case 'fuente_voltaje':
-      return { activo: 1, corriente_max: '5.00', dcOrAc: 'dc', phase: '0.00', frequency: '0.00' };
-    case 'fuente_corriente':
-      return { activo: 1, voltaje_max: '30.00', dcOrAc: 'dc', phase: '0.00', frequency: '0.00' };
-    case 'diodo':
-      return { tipo: 'Rectificador', corriente_max: '1.000', voltaje_inv_max: '100.000', caida_tension: '0.700', rz: '0.00', is_saturacion: '1e-14' };
-    case 'capacitor':
-      return { tipo_dioelectrico: 'Cerámico', voltaje: '50.00', polaridad: 0 };
-    case 'bobina':
-      return { corriente_max: '0.500', resistencia_dc: '5.000' };
-    case 'transistor_bjt':
-      return { tipo: 'NPN', configuracion: 'Uso General', beta: '100', vbe_saturacion: '0.600', vce_saturacion: '0.300', corriente_colector_max: '0.800', potencia_maxima: '0.500', frecuencia_transicion: '300', modo_operacion: 'Amplificador/Interruptor' };
-    case 'transistor_fet':
-      return { tipo: 'MOSFET_N', idss: '0.200', vp: '2.000', gm: '0.320', rd: '5.000', configuracion: 'Interruptor', modo_operacion: 'Conmutación Rápida' };
-    case 'regulador_voltaje':
-      return { tipo: 'Lineal Fijo', voltaje_salida: '5.000', corriente_maxima: '1.500', voltaje_entrada_min: '7.000', voltaje_entrada_max: '35.000', dropout_voltage: '2.000', disipacion_maxima: '15.000', tolerancia: '4.00' };
-    default: return {};
-  }
+  if (!TIPOS_VALIDOS.includes(tipo)) return {};
+  const dummy = ComponentFactory.crearVacio(tipo);
+  return { ...dummy.params };
 }
 
 /**
  * ConstructorNetlist — Subformulario para agregar componentes uno por uno.
+ *
+ * Devuelve a `onAgregar` un objeto con la forma "admin".
+ * Quien lo reciba debe usar `ComponentFactory.fromAdmin`
+ * (o `ComponentFactory.from`) si quiere una instancia tipada.
  */
 export function ConstructorNetlist({ componentes, onAgregar }) {
-  const [tipo,       setTipo]       = useState('');
-  const [value,      setValue]      = useState('');
-  const [nodos,      setNodos]      = useState({});
-  const [rotation,   setRotation]   = useState(0);
-  const [params,     setParams]     = useState({});
-  const [focusPin,   setFocusPin]   = useState(null);   // key del pin enfocado
-  const [errVal,     setErrVal]     = useState('');
+  const [tipo,     setTipo]     = useState('');
+  const [value,    setValue]    = useState('');
+  const [nodos,    setNodos]    = useState({});
+  const [rotation, setRotation] = useState(0);
+  const [params,   setParams]   = useState({});
+  const [focusPin, setFocusPin] = useState(null);
+  const [errVal,   setErrVal]   = useState('');
 
   const pinesActuales = tipo ? (PINES_POR_TIPO[tipo] ?? []) : [];
 
-  // Nodos ya usados en el circuito (de cualquier pin de cualquier componente)
+  // Nodos ya usados por cualquier pin de cualquier componente.
+  // Soporta tanto componentes JSON (con `nodos`) como instancias Component.
   const nodosExistentes = [
     ...new Set(
-      componentes.flatMap((c) =>
-        Object.values(c.nodos ?? {}).filter((v) => v !== '' && v != null)
-      )
+      componentes.flatMap((c) => {
+        if (typeof c.getNodos === 'function') return c.getNodos();
+        return Object.values(c.nodos ?? c.nodes ?? {})
+          .map((v) => (v && typeof v === 'object' ? v.nodo : v))
+          .filter(Boolean);
+      })
     ),
   ].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 
@@ -288,7 +251,6 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
 
   function handleAgregar() {
     if (!puedeAgregar) return;
-    // Construir objeto nodos final con valores trimmed
     const nodosFinal = Object.fromEntries(
       pinesActuales.map((p) => [p.key, (nodos[p.key] ?? '').trim()])
     );
@@ -307,14 +269,12 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
     <div className="admin-builder">
       <p className="admin-subsection-title">Agregar componente</p>
 
-      {/* ID temporal */}
       <div className="admin-builder__row">
         <FieldWrap label="ID temporal (visual, no se envía al backend)">
           <input className="admin-input admin-input--readonly" value={idVisual} readOnly />
         </FieldWrap>
       </div>
 
-      {/* Tipo + rotacion */}
       <div className="admin-builder__row">
         <FieldWrap label="Tipo de componente">
           <select className="admin-select admin-select--sm" value={tipo} onChange={(e) => handleTipoChange(e.target.value)}>
@@ -331,7 +291,6 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
         </FieldWrap>
       </div>
 
-      {/* Valor con unidad visible como addon */}
       {tipo && RANGOS[tipo]?.min !== null && (
         <div className="admin-builder__row">
           <FieldWrap label={`Valor — ${ejemploPorTipo(tipo)}`}>
@@ -357,7 +316,6 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
         </div>
       )}
 
-      {/* Pines (dinamicos segun el tipo: 2 o 3 nodos) */}
       {tipo && pinesActuales.length > 0 && (
         <>
           {tipo === 'resistencia_variable' && (
@@ -390,7 +348,6 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
         </>
       )}
 
-      {/* Parametros adicionales */}
       {tipo && (
         <RecuadroParametros
           tipo={tipo}
@@ -402,7 +359,6 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
         />
       )}
 
-      {/* Botones */}
       <div className="admin-builder__btn-row">
         <button
           type="button"
@@ -449,10 +405,10 @@ function FieldWrap({ label, children }) {
 export { PINES_POR_TIPO };
 
 /**
- * Normaliza una entrada de netlist heredada (con `nodo_a` / `nodo_b`)
- * al formato unificado con `nodos: { ... }`.
+ * @param {object|import('../../../domain').Component} comp
  */
 export function normalizarComponente(comp) {
+  if (typeof comp.toAdminJSON === 'function') return comp.toAdminJSON();
   if (comp.nodos && typeof comp.nodos === 'object') return comp;
 
   // Compat retroactiva: nodo_a / nodo_b → { a, b }
