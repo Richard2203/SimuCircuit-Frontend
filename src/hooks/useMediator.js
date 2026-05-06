@@ -10,8 +10,8 @@ import eventBus from '../core/EventBus';
  *
  * Expone:
  *   - state   -> estado actual del Mediator
- *   - dispatch -> acciones síncronas
- *   - api     -> operaciones asíncronas que van al servidor
+ *   - dispatch -> acciones sincronas
+ *   - api     -> operaciones asincronas que van al servidor
  *
  * @returns {{ state: object, dispatch: Function, api: object }}
  */
@@ -41,14 +41,20 @@ export function useMediator() {
    * en useMemo. Esto garantiza que la referencia del objeto sea estable entre renders,
    * evitando que useEffect([api]) se dispare en bucle infinito.
    */
-  const cargarFiltros          = useCallback((p)  => mediator.cargarFiltros(p),             []);
-  const buscarCircuitos        = useCallback((p)  => mediator.buscarCircuitos(p),            []);
-  const cargarCircuito         = useCallback((id) => mediator.cargarCircuito(id),            []);
-  const cargarComponentes      = useCallback(()   => mediator.cargarComponentes(),           []);
-  const simularDC              = useCallback((p)  => mediator.simularDC(p),                  []);
-  const simularAC              = useCallback((p)  => mediator.simularAC(p),                  []);
-  const calcularTheveninNorton = useCallback((p)  => mediator.calcularTheveninNorton(p),     []);
-  const calcularSuperposicion  = useCallback((p)  => mediator.calcularSuperposicion(p),      []);
+  const cargarFiltros          = useCallback((p)  => mediator.cargarFiltros(p),                          []);
+  const buscarCircuitos        = useCallback((p)  => mediator.buscarCircuitos(p),                         []);
+  const cargarCircuito         = useCallback((id) => mediator.cargarCircuito(id),                         []);
+  const cargarComponentes      = useCallback(()   => mediator.cargarComponentes(),                        []);
+  const simularDC              = useCallback((p)  => mediator.simularDC(p),                               []);
+  const simularAC              = useCallback((p)  => mediator.simularAC(p),                               []);
+  const calcularTheveninNorton       = useCallback((p)  => mediator.calcularTheveninNorton(p),                  []);
+  const calcularSuperposicion        = useCallback((p)  => mediator.calcularSuperposicion(p),                   []);
+  const calcularTransformacionFuente = useCallback((p)  => mediator.calcularTransformacionFuente(p),            []);
+  const calcularNodal                = useCallback(()   => mediator.calcularNodal(),                            []);
+  const calcularTransitorio          = useCallback((p)  => mediator.calcularTransitorio(p),                     []);
+  const calcularResistenciaEq        = useCallback((p)  => mediator.calcularResistenciaEquivalente(p),          []);
+  const calcularDivisorVoltaje       = useCallback((p)  => mediator.calcularDivisorVoltaje(p),                  []);
+  const calcularDivisorCorriente     = useCallback((p)  => mediator.calcularDivisorCorriente(p),               []);
 
   const api = useMemo(() => ({
     cargarFiltros,
@@ -59,6 +65,12 @@ export function useMediator() {
     simularAC,
     calcularTheveninNorton,
     calcularSuperposicion,
+    calcularTransformacionFuente,
+    calcularNodal,
+    calcularTransitorio,
+    calcularResistenciaEq,
+    calcularDivisorVoltaje,
+    calcularDivisorCorriente,
   }), [
     cargarFiltros,
     buscarCircuitos,
@@ -68,6 +80,12 @@ export function useMediator() {
     simularAC,
     calcularTheveninNorton,
     calcularSuperposicion,
+    calcularTransformacionFuente,
+    calcularNodal,
+    calcularTransitorio,
+    calcularResistenciaEq,
+    calcularDivisorVoltaje,
+    calcularDivisorCorriente,
   ]);
 
   return { state, dispatch, api };
