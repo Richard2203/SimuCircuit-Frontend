@@ -75,7 +75,7 @@ function useChart(canvasRef, config, deps) {
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-// ─── DC voltajes ───────────────────────────────────────────────────────────────
+// --- DC voltajes ----------------------------------------------------------
 
 function DCVoltageChart({ dcData }) {
   const ref = useRef(null);
@@ -112,7 +112,7 @@ function DCVoltageChart({ dcData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 200 }} />;
 }
 
-// ─── DC corrientes ─────────────────────────────────────────────────────────────
+// --- DC corrientes ----------------------------------------------------------
 
 function DCCurrentChart({ dcData }) {
   const ref = useRef(null);
@@ -149,7 +149,7 @@ function DCCurrentChart({ dcData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 180 }} />;
 }
 
-// ─── AC magnitud ───────────────────────────────────────────────────────────────
+// --- AC magnitud ----------------------------------------------------------
 
 function ACMagnitudChart({ acData }) {
   const ref = useRef(null);
@@ -195,7 +195,7 @@ function ACMagnitudChart({ acData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 220 }} />;
 }
 
-// ─── AC fase ───────────────────────────────────────────────────────────────────
+// --- AC fase ----------------------------------------------------------
 
 function ACFaseChart({ acData }) {
   const ref = useRef(null);
@@ -242,67 +242,7 @@ function ACFaseChart({ acData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 180 }} />;
 }
 
-// ─── Sintetico ─────────────────────────────────────────────────────────────────
-
-const WAVEFORMS_MOCK = [
-  { label: 'V(t)', color: '#6c63ff', freq: 1.0 },
-  { label: 'I(t)', color: '#4ade80', freq: 0.6 },
-  { label: 'P(t)', color: '#fbbf24', freq: 1.4, amplitudeScale: 0.7 },
-];
-
-function SyntheticCanvas({ isActive }) {
-  const canvasRef = useRef(null);
-  const animRef   = useRef(null);
-  const phaseRef  = useRef(0);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const dpr  = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width  = rect.width  * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-    const W = rect.width;
-    const H = rect.height;
-    const amplitude = H / 2 - 20;
-
-    function frame() {
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = '#16181d'; ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = '#252830'; ctx.lineWidth = 0.5;
-      for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-      for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-      ctx.strokeStyle = '#323540'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
-
-      WAVEFORMS_MOCK.forEach(({ label, color, freq, amplitudeScale = 1 }, idx) => {
-        ctx.beginPath();
-        ctx.strokeStyle = isActive ? color : '#2e3139';
-        ctx.lineWidth = isActive ? 2 : 1.5;
-        for (let px = 0; px < W; px++) {
-          const t = (px / W) * 4 * Math.PI + phaseRef.current;
-          const y = H/2 - amplitude * 0.55 * amplitudeScale * Math.sin(freq * t);
-          px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
-        }
-        ctx.stroke();
-        ctx.fillStyle = isActive ? color : '#3a3f4e';
-        ctx.font = '11px monospace';
-        ctx.fillText(label, 8, 16 + idx * 18);
-      });
-
-      if (isActive) { phaseRef.current += 0.04; animRef.current = requestAnimationFrame(frame); }
-    }
-
-    frame();
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, [isActive]);
-
-  return <canvas ref={canvasRef} style={{ width: '100%', height: 200, borderRadius: 8, display: 'block', background: '#16181d' }} />;
-}
-
-// ─── SubTabPill ────────────────────────────────────────────────────────────────
+// --- SubTabPill ----------------------------------------------------------
 
 function SubTabPill({ active, onClick, children }) {
   return (
@@ -319,7 +259,7 @@ function SubTabPill({ active, onClick, children }) {
   );
 }
 
-// ─── WaveformChart ─────────────────────────────────────────────────────────────
+// --- WaveformChart ----------------------------------------------------------
 
 /**
  * WaveformChart — Grafica de formas de onda.
@@ -329,7 +269,7 @@ function SubTabPill({ active, onClick, children }) {
  *               acData debe llegar ya transformado por SimulacionService: 
  *               Array de { frecuencia, voltages: { nodo: { magnitud, fase } } }
  *  2. dcData  → Voltajes nodales + corrientes de rama (lineas de puntos, Chart.js)
- *  3. Animación sintetica con Canvas API
+ *  3. Animacion sintetica con Canvas API
  *
  * @param {{ circuit, isActive, acData, dcData }} props
  */
@@ -343,9 +283,7 @@ export function WaveformChart({ circuit, isActive, acData, dcData }) {
     ? `AC — ${acData.length} puntos · ${acData[0]?.frecuencia}Hz → ${acData[acData.length-1]?.frecuencia}Hz`
     : hasDC
       ? 'DC — voltajes nodales y corrientes de rama'
-      : isActive
-        ? 'Simulación activa — forma de onda en tiempo real'
-        : 'Ejecuta ⚡ Simular DC o ∿ Simular AC para ver las gráficas';
+      : 'Ejecuta Simular DC o ∿ Simular AC para ver las gráficas.';
 
   const wrap = (children) => (
     <div style={{ background: '#16181d', borderRadius: 8, padding: '12px 8px' }}>{children}</div>
@@ -372,7 +310,20 @@ export function WaveformChart({ circuit, isActive, acData, dcData }) {
         </>
       )}
 
-      {!hasAC && !hasDC && <SyntheticCanvas isActive={isActive} />}
+      {!hasAC && !hasDC && (
+        <div style={{
+          background: '#1e1e2e',
+          borderRadius: 8,
+          padding: '32px 16px',
+          textAlign: 'center',
+          color: '#64748b',
+          fontSize: 13,
+          fontFamily: 'monospace',
+        }}>
+          No hay datos de simulación aún.<br />
+          Presiona <strong>Simular DC</strong> o <strong>∿ Simular AC</strong> para generar las gráficas.
+        </div>
+      )}
     </div>
   );
 }
