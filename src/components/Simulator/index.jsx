@@ -1,5 +1,5 @@
 import { toPng } from 'html-to-image';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { CircuitSVG }         from '../../utils/circuitSVG';
 import { getDifficultyClass } from '../../utils/difficulty';
 import { useSimTime }         from '../../hooks/useSimTime';
@@ -11,7 +11,6 @@ import { Circuit }            from '../../domain';
 
 /**
  * Simulator — Vista del simulador para un circuito seleccionado.
- *
  * @param {{ state: object, dispatch: Function, api: object }} props
  */
 export function Simulator({ state, dispatch, api }) {
@@ -25,6 +24,8 @@ export function Simulator({ state, dispatch, api }) {
     loading,
     netlist,
     teoremaResultado,
+    analisisResultado,
+    analisisError,
   } = state;
 
   const svgContainerRef = useRef(null);
@@ -62,25 +63,12 @@ export function Simulator({ state, dispatch, api }) {
   const isActive  = simStatus === 'activo';
   const diffClass = getDifficultyClass(c.dificultad);
 
-  // Metricas — calculadas desde la netlist canonica
-  const voltage    = c.voltajePrincipal;
-  const current    = c.corrientePrincipal;
-  const resistance = c.resistenciaPrincipal;
-  const power      = parseFloat((voltage * current).toFixed(2));
-
   const isRunningDC = loading?.simulacionDC;
   const isRunningAC = loading?.simulacionAC;
 
   // Botones AC/DC visibles segun las fuentes presentes en la netlist
   const mostrarDC = c.tieneDC;
   const mostrarAC = c.tieneAC;
-
-  const metrics = [
-    { val: voltage    ? `${voltage}V`    : '—', label: 'Voltaje'     },
-    { val: current    ? `${current}A`    : '—', label: 'Corriente'   },
-    { val: resistance ? `${resistance}Ω` : '—', label: 'Resistencia' },
-    { val: power      ? `${power}W`      : '—', label: 'Potencia'    },
-  ];
 
   return (
     <div className="page-container">
@@ -147,36 +135,12 @@ export function Simulator({ state, dispatch, api }) {
                     </button>
                   )}
                   {mostrarAC && (
-                    <button
-                      className="control-btn"
-                      onClick={() =>
-                        api.simularAC({
-                          configuracion_ac: {
-                            f_inicial: 10,
-                            f_final: 100000,
-                            puntos: 50,
-                            barrido: 'log',
-                          },
-                        })
-                      }
-                      disabled={!isActive || isRunningAC}
-                    >
-                      {isRunningAC ? '⏳ Simulando…' : '∿ Simular AC'}
-                    </button>
+                    <ACSimularBtn isActive={isActive} isRunning={isRunningAC} onSimular={api.simularAC} />
                   )}
                 </div>
-
                 {!isActive && (
-                  <p style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    color: '#fbbf24',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}>
-                    <span>⚠</span>
-                    Primero debes energizar el circuito presionando <strong>▶ Iniciar</strong>
+                  <p style={{ marginTop: 8, fontSize: 12, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>⚠</span> Primero debes energizar el circuito presionando <strong>▶ Iniciar</strong>
                   </p>
                 )}
               </div>
@@ -210,15 +174,6 @@ export function Simulator({ state, dispatch, api }) {
                 ? c.descripcion
                 : `Circuito — ${c.unidad_tematica} · ${c.materia}`}
             </p>
-
-            <div className="metric-grid">
-              {metrics.map((m) => (
-                <div key={m.label} className="metric-card">
-                  <div className="metric-val">{m.val}</div>
-                  <div className="metric-lbl">{m.label}</div>
-                </div>
-              ))}
-            </div>
 
             {/* Resultado DC */}
             {simResultadoDC && (
@@ -293,73 +248,610 @@ export function Simulator({ state, dispatch, api }) {
             {activeTab === 'graficas' ? (
               <WaveformChart circuit={c} isActive={isActive} acData={simResultadoAC} dcData={simResultadoDC} />
             ) : (
-              <div className="accordions">
-                <AccordionSection id="nodal" title="Análisis Nodal/Mallas DC" icon="⚡" state={state} dispatch={dispatch}>
-                  <div className="analysis-content">
-                    <p>Nodo A: V_A = {voltage}V</p>
-                    <p>Malla 1: {current}·R₁ + {current}·R₂ = {voltage}</p>
-                    <p>Corriente total: I = V/R = {voltage}/{resistance} = {resistance > 0 ? (voltage / resistance).toFixed(3) : '—'}A</p>
-                  </div>
-                </AccordionSection>
-
-                <AccordionSection id="transitorio" title="Análisis Transitorio" icon="∿" state={state} dispatch={dispatch}>
-                  <div className="analysis-content">
-                    <p>Tiempo de subida: {(c.componentCounts.R * 0.23).toFixed(1)}ms</p>
-                    <p>Tiempo de establecimiento: {(c.componentCounts.R * 0.42).toFixed(1)}ms</p>
-                    <p>Sobrepaso: {(c.componentCounts.C * 1.3 + 2).toFixed(1)}%</p>
-                    <p>Constante de tiempo: τ = {(c.componentCounts.R * c.componentCounts.C * 0.1).toFixed(3)}ms</p>
-                  </div>
-                </AccordionSection>
-
-                <AccordionSection id="general" title="Cálculos Generales" icon="Σ" state={state} dispatch={dispatch}>
-                  <div className="analysis-content">
-                    <p>Potencia disipada: P = {power}W</p>
-                    <p>Energía acumulada (1s): E = {power}J</p>
-                    <p>Resistencia equivalente: R_eq = {resistance}Ω</p>
-                  </div>
-                </AccordionSection>
-
-                <AccordionSection id="leyes" title="Leyes Fundamentales" icon="☰" state={state} dispatch={dispatch}>
-                  <div className="analysis-content">
-                    <p>Ley de Ohm: V = I·R → {voltage} = {current}·{current > 0 ? (voltage / current).toFixed(1) : '—'}</p>
-                    <p>KVL: ΣV = 0 en cada malla cerrada</p>
-                    <p>KCL: ΣI = 0 en cada nodo</p>
-                    <p>Potencia: P = V·I = I²·R = V²/R</p>
-                  </div>
-                </AccordionSection>
-
-                {netlist.length > 0 && (
-                  <AccordionSection id="thevenin" title="Thévenin / Norton" icon="⊛" state={state} dispatch={dispatch}>
-                    <TeoremasPanel
-                      tipo="thevenin-norton"
-                      resultado={teoremaResultado?.tipo === 'thevenin-norton' ? teoremaResultado : null}
-                      loading={loading?.teorema}
-                      error={simError}
-                      onCalcular={(componenteCargaId) => api.calcularTheveninNorton({ componenteCargaId })}
-                    />
-                  </AccordionSection>
-                )}
-
-                {netlist.length > 0 && (
-                  <AccordionSection id="superposicion" title="Superposición" icon="∑" state={state} dispatch={dispatch}>
-                    <TeoremasPanel
-                      tipo="superposicion"
-                      resultado={teoremaResultado?.tipo === 'superposicion' ? teoremaResultado : null}
-                      loading={loading?.teorema}
-                      error={simError}
-                      onCalcular={(componenteObjetivoId, parametroAnalisis) =>
-                        api.calcularSuperposicion({ componenteObjetivoId, parametroAnalisis })
-                      }
-                    />
-                  </AccordionSection>
-                )}
-              </div>
+              <AccordionsCondicionales
+                c={c} state={state} dispatch={dispatch} api={api}
+                netlist={netlist}
+                analisisResultado={analisisResultado}
+                teoremaResultado={teoremaResultado}
+                simResultadoDC={simResultadoDC}
+                loading={loading}
+                simError={simError}
+                analisisError={analisisError}
+              />
             )}
           </div>
         </div>
 
         <SimulatorSidebar circuit={c} simStatus={simStatus} simTime={simTime} netlist={netlist} />
       </div>
+    </div>
+  );
+}
+
+// Logica condicional de accordions
+//
+// Reglas derivadas de los JSONs del backend y las rutas disponibles:
+//
+//  Analisis Nodal DC     -> circuito tiene fuente DC (tieneDC)
+//  Análisis Transitorio  -> tiene capacitor o bobina + fuente DC
+//  Cálculos Generales    -> tiene resistencias (R > 0)
+//  Leyes Fundamentales   -> siempre (KVL/KCL) + divisor V si solo fuente_voltaje DC
+//                          + divisor I si tiene fuente_corriente
+//  Thevenin / Norton     -> DC + ≥2 resistencias + sin transistores/reguladores
+//  Superposicion         -> DC + ≥2 fuentes independientes
+//  Transformacion Fuente -> DC + exactamente 1 fuente + ≥1 resistencia adyacente
+
+function AccordionsCondicionales({
+  c, state, dispatch, api,
+  netlist, analisisResultado, teoremaResultado,
+  simResultadoDC, loading, simError, analisisError,
+}) {
+  const cc = c.componentCounts; // { R, C, L, F, D, Q, J, U }
+
+  // Fuentes DC y AC por separado
+  const fuentesDC = (netlist ?? []).filter(
+    (n) => (n.type === 'fuente_voltaje' || n.type === 'fuente_corriente') &&
+            (n.params?.dcOrAc ?? 'dc').toLowerCase() === 'dc'
+  );
+  const tieneFuenteVoltajeDC  = fuentesDC.some((n) => n.type === 'fuente_voltaje');
+  const tieneFuenteCorrienteDC = fuentesDC.some((n) => n.type === 'fuente_corriente');
+  const numFuentesDC          = fuentesDC.length;
+
+  // Componentes activos no-lineales: transistores y reguladores complican Thevenin
+  const tieneNoLineales = cc.Q > 0 || cc.J > 0 || cc.U > 0;
+
+  // Flags de visibilidad por accordion
+  const mostrarNodal       = c.tieneDC;
+  const mostrarTransitorio = c.tieneDC && (cc.C > 0 || cc.L > 0);
+  const mostrarGeneral     = cc.R > 0;
+  const mostrarLeyes       = true; // KVL/KCL siempre; divisores condicionados internamente
+  const mostrarThevenin    = c.tieneDC && cc.R >= 2 && !tieneNoLineales;
+  const mostrarSuper       = c.tieneDC && numFuentesDC >= 2;
+  const mostrarTransfFuente = c.tieneDC && numFuentesDC === 1 && cc.R >= 1 && !tieneNoLineales;
+
+  const A = (id, title, icon, children) => (
+    <AccordionSection key={id} id={id} title={title} icon={icon} state={state} dispatch={dispatch}>
+      {children}
+    </AccordionSection>
+  );
+
+  const divResult = analisisResultado?.tipo === 'divisor-voltaje' || analisisResultado?.tipo === 'divisor-corriente'
+    ? analisisResultado : null;
+
+  return (
+    <div className="accordions">
+
+      {mostrarNodal && A('nodal', 'Análisis Nodal/Mallas DC', '⚡',
+        <NodalPanel
+          resultado={analisisResultado?.tipo === 'nodal' ? analisisResultado : simResultadoDC}
+          loading={loading?.analisisNodal}
+          onCalcular={() => api.calcularNodal()}
+        />
+      )}
+
+      {mostrarTransitorio && A('transitorio', 'Análisis Transitorio', '∿',
+        <TransitorioPanel
+          resultado={analisisResultado?.tipo === 'transitorio' ? analisisResultado : null}
+          loading={loading?.analisisTransitorio}
+          tieneReactivos
+          onCalcular={(cfg) => api.calcularTransitorio(cfg)}
+        />
+      )}
+
+      {mostrarGeneral && A('general', 'Cálculos Generales', 'Σ',
+        <GeneralPanel
+          resultado={analisisResultado?.tipo === 'resistencia-equivalente' ? analisisResultado : null}
+          loading={loading?.analisisReq}
+          netlist={netlist}
+          analisisError={analisisError}
+          onCalcularReq={(nodoA, nodoB) => api.calcularResistenciaEq({ nodoA, nodoB })}
+        />
+      )}
+
+      {mostrarLeyes && A('leyes', 'Leyes Fundamentales', '☰',
+        <LeyesPanel
+          resultado={divResult}
+          loading={loading?.analisisDivisor}
+          netlist={netlist}
+          tieneFuenteVoltajeDC={tieneFuenteVoltajeDC}
+          tieneFuenteCorrienteDC={tieneFuenteCorrienteDC}
+          analisisError={analisisError}
+          onCalcularDivisorV={(id) => api.calcularDivisorVoltaje({ componenteObjetivoId: id })}
+          onCalcularDivisorI={(id) => api.calcularDivisorCorriente({ componenteObjetivoId: id })}
+        />
+      )}
+
+      {mostrarThevenin && A('thevenin', 'Thévenin / Norton', '⊛',
+        <TeoremasPanel
+          tipo="thevenin-norton"
+          resultado={teoremaResultado?.tipo === 'thevenin-norton' ? teoremaResultado : null}
+          loading={loading?.teorema}
+          error={simError}
+          onCalcular={(componenteCargaId) => api.calcularTheveninNorton({ componenteCargaId })}
+        />
+      )}
+
+      {mostrarSuper && A('superposicion', 'Superposición', '∑',
+        <TeoremasPanel
+          tipo="superposicion"
+          resultado={teoremaResultado?.tipo === 'superposicion' ? teoremaResultado : null}
+          loading={loading?.teorema}
+          error={simError}
+          onCalcular={(componenteObjetivoId, parametroAnalisis) =>
+            api.calcularSuperposicion({ componenteObjetivoId, parametroAnalisis })
+          }
+        />
+      )}
+
+      {mostrarTransfFuente && A('transformacion-fuente', 'Transformación de Fuente', '⇄',
+        <TransformacionFuentePanel
+          resultado={teoremaResultado?.tipo === 'transformacion-fuente' ? teoremaResultado : null}
+          loading={loading?.teorema}
+          error={simError}
+          netlist={netlist}
+          onCalcular={(fuenteId) => api.calcularTransformacionFuente({ fuenteId })}
+        />
+      )}
+
+      {/* Mensaje cuando ningun accordion aplica (circuito AC puro, solo diodos, etc.) */}
+      {!mostrarNodal && !mostrarTransitorio && !mostrarThevenin && !mostrarSuper && (
+        <p style={{ fontSize: 12, color: '#3a3f4e', padding: '12px 4px' }}>
+          Los cálculos avanzados no aplican para este tipo de circuito.
+          Usa la pestaña 📊 Gráficas para analizar la respuesta en frecuencia.
+        </p>
+      )}
+
+    </div>
+  );
+}
+
+// Helpers de formato LaTeX -> texto legible
+
+function latexToText(str) {
+  if (!str) return '';
+  return str
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1) / ($2)')
+    .replace(/\_\{([^}]+)\}/g, (_, s) => s)
+    .replace(/\_([a-zA-Z0-9])/g, (_, s) => s)
+    .replace(/\^\{([^}]+)\}/g, '^$1')
+    .replace(/\^([a-zA-Z0-9])/g, '^$1')
+    .replace(/\\text\{([^}]+)\}/g, '$1')
+    .replace(/\\mathrm\{([^}]+)\}/g, '$1')
+    .replace(/\\Omega/g, 'Ω').replace(/\\omega/g, 'ω')
+    .replace(/\\alpha/g, 'α').replace(/\\beta/g, 'β')
+    .replace(/\\pi/g, 'π').replace(/\\infty/g, '∞')
+    .replace(/\\cdot/g, '·').replace(/\\times/g, '×')
+    .replace(/\\approx/g, '≈').replace(/\\leq/g, '≤')
+    .replace(/\\geq/g, '≥').replace(/\\neq/g, '≠')
+    .replace(/[{}]/g, '').replace(/\\/g, '').trim();
+}
+
+function formatNums(str) {
+  return str.replace(/(-?\d+\.\d+)/g, (match) => {
+    const n = parseFloat(match);
+    if (Number.isInteger(n)) return String(n);
+    return parseFloat(n.toPrecision(5)).toString();
+  });
+}
+
+function PasoFormula({ paso }) {
+  const texto = formatNums(latexToText(paso.eq ?? ''));
+  return (
+    <div style={{
+      padding: '6px 10px', background: '#1a1b22', borderRadius: 6,
+      borderLeft: '2px solid #6c63ff', display: 'flex', gap: 10, alignItems: 'flex-start',
+    }}>
+      <span style={{ fontSize: 10, color: '#5a6278', minWidth: 16, paddingTop: 2 }}>{paso.paso}.</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {paso.titulo && <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>{paso.titulo}</span>}
+        <span style={{ fontSize: 13, color: '#e2e8f0', fontFamily: 'monospace', letterSpacing: '0.02em' }}>{texto}</span>
+      </div>
+    </div>
+  );
+}
+
+
+
+const ROW = ({ label, value, color = '#94a3b8', mono = true }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
+    <span style={{ fontSize: 12, color: '#64748b' }}>{label}</span>
+    <span style={{ fontSize: 12, color, fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{value}</span>
+  </div>
+);
+
+const CalcBtn = ({ onClick, loading, children, style = {} }) => (
+  <button
+    className="control-btn primary"
+    onClick={onClick}
+    disabled={loading}
+    style={{ fontSize: 12, padding: '4px 12px', ...style }}
+  >
+    {loading ? '⏳ Calculando…' : children}
+  </button>
+);
+
+const Placeholder = ({ text }) => (
+  <p style={{ fontSize: 12, color: '#3a3f4e', margin: 0 }}>{text}</p>
+);
+
+// Analisis Nodal
+
+function NodalPanel({ resultado, loading, onCalcular }) {
+  const voltages = resultado?.voltages ?? {};
+  const currents = resultado?.currents ?? {};
+  const tieneData = Object.keys(voltages).length > 0;
+
+  return (
+    <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <CalcBtn onClick={onCalcular} loading={loading}>⚡ Calcular análisis nodal</CalcBtn>
+
+      {tieneData && (
+        <>
+          <p style={{ fontSize: 11, color: '#5a6278', margin: '4px 0 0', fontWeight: 500 }}>Voltajes nodales</p>
+          {Object.entries(voltages).map(([nodo, v]) => (
+            <ROW key={nodo} label={`V(nodo ${nodo})`} value={`${Number(v).toFixed(4)} V`} color="#a78bfa" />
+          ))}
+          {Object.keys(currents).length > 0 && (
+            <>
+              <p style={{ fontSize: 11, color: '#5a6278', margin: '4px 0 0', fontWeight: 500 }}>Corrientes de rama</p>
+              {Object.entries(currents).map(([id, i]) => (
+                <ROW key={id} label={`I(${id})`} value={`${Number(i).toFixed(6)} A`} color="#4ade80" />
+              ))}
+            </>
+          )}
+        </>
+      )}
+
+      {!tieneData && !loading && <Placeholder text="Presiona el botón para ejecutar el análisis nodal DC." />}
+    </div>
+  );
+}
+
+// Analisis Transitorio
+
+function TransitorioPanel({ resultado, loading, tieneReactivos, onCalcular }) {
+  const [tStop,  setTStop]  = useState('0.05');
+  const [deltaT, setDeltaT] = useState('0.0005');
+
+  const puntos = resultado?.puntos ?? [];
+  const tieneData = puntos.length > 0;
+
+  const inputStyle = {
+    background: '#1e1e2e', border: '1px solid #444', borderRadius: 4,
+    padding: '3px 7px', color: '#ccc', fontFamily: 'monospace',
+    fontSize: 12, width: 90,
+  };
+
+  return (
+    <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {!tieneReactivos && (
+        <p style={{ fontSize: 12, color: '#fbbf24', margin: 0 }}>
+          ⚠ El análisis transitorio es útil cuando el circuito tiene capacitores o bobinas.
+        </p>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <label style={{ fontSize: 10, color: '#5a6278' }}>t_stop (s)</label>
+          <input style={inputStyle} value={tStop} onChange={(e) => setTStop(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <label style={{ fontSize: 10, color: '#5a6278' }}>delta_t (s)</label>
+          <input style={inputStyle} value={deltaT} onChange={(e) => setDeltaT(e.target.value)} />
+        </div>
+        <CalcBtn
+          onClick={() => onCalcular({ t_stop: parseFloat(tStop), delta_t: parseFloat(deltaT) })}
+          loading={loading}
+        >
+          ∿ Ejecutar
+        </CalcBtn>
+      </div>
+
+      {tieneData && (
+        <>
+          <p style={{ fontSize: 11, color: '#5a6278', margin: '4px 0 0', fontWeight: 500 }}>
+            {puntos.length} pasos — t = {puntos[0]?.tiempo}s → {puntos[puntos.length - 1]?.tiempo}s
+          </p>
+          {/* Muestra primer + ultimo instante */}
+          {[puntos[0], puntos[puntos.length - 1]].map((p, idx) => p && (
+            <div key={idx} style={{ background: '#1a1b1e', borderRadius: 6, padding: '6px 10px' }}>
+              <p style={{ fontSize: 11, color: '#5a6278', margin: '0 0 4px' }}>
+                t = {p.tiempo} s ({idx === 0 ? 'inicio' : 'fin'})
+              </p>
+              {Object.entries(p.voltajes ?? {}).map(([n, v]) => (
+                <ROW key={n} label={`V(${n})`} value={`${Number(v).toFixed(4)} V`} color="#a78bfa" />
+              ))}
+              {Object.entries(p.corrientes ?? {}).map(([id, i]) => (
+                <ROW key={id} label={`I(${id})`} value={`${Number(i).toFixed(6)} A`} color="#4ade80" />
+              ))}
+            </div>
+          ))}
+          <p style={{ fontSize: 11, color: '#3a3f4e', margin: 0 }}>
+            Ve a la pestaña 📊 Gráficas → Simular AC para ver la evolución completa.
+          </p>
+        </>
+      )}
+
+      {!tieneData && !loading && <Placeholder text="Configura el intervalo de tiempo y presiona Ejecutar." />}
+    </div>
+  );
+}
+
+// Calculos Generales (Req)
+
+function GeneralPanel({ resultado, loading, netlist, analisisError, onCalcularReq }) {
+  const [nodoA, setNodoA] = useState('1');
+  const [nodoB, setNodoB] = useState('0');
+
+  // Extraer nodos disponibles de la netlist
+  // Los nodos pueden venir como string "1" o como objeto {nodo, x, y}
+  const nodosDisponibles = [...new Set(
+    (netlist ?? []).flatMap((c) =>
+      Object.values(c?.nodes ?? {}).map((v) =>
+        typeof v === 'object' ? String(v?.nodo ?? '') : String(v)
+      )
+    ).filter(Boolean)
+  )].sort((a, b) => {
+    const na = Number(a), nb = Number(b);
+    return !isNaN(na) && !isNaN(nb) ? na - nb : a.localeCompare(b);
+  });
+
+  const tieneReq = resultado?.tipo === 'resistencia-equivalente';
+
+  const selectStyle = {
+    background: '#1e1e2e', border: '1px solid #444', borderRadius: 4,
+    padding: '3px 7px', color: '#ccc', fontFamily: 'monospace', fontSize: 12, width: 70,
+  };
+
+  return (
+    <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+      {/* Req */}
+      <p style={{ fontSize: 11, color: '#5a6278', margin: 0, fontWeight: 500 }}>Resistencia equivalente entre nodos</p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <label style={{ fontSize: 10, color: '#5a6278' }}>Nodo A</label>
+          <select style={selectStyle} value={nodoA} onChange={(e) => setNodoA(e.target.value)}>
+            {nodosDisponibles.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <label style={{ fontSize: 10, color: '#5a6278' }}>Nodo B</label>
+          <select style={selectStyle} value={nodoB} onChange={(e) => setNodoB(e.target.value)}>
+            {nodosDisponibles.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <CalcBtn onClick={() => onCalcularReq(nodoA, nodoB)} loading={loading} style={{ opacity: nodoA === nodoB ? 0.5 : 1 }} disabled={loading || nodoA === nodoB}>Calcular R_eq</CalcBtn>
+      </div>
+
+      {analisisError && analisisError.toLowerCase().includes('nodo') && (
+        <p style={{ fontSize: 12, color: '#fbbf24', margin: '4px 0', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span>⚠</span> {analisisError}
+        </p>
+      )}
+
+      {tieneReq && (
+        <ROW label={`R_eq (nodo ${resultado.nodos?.inicio} → ${resultado.nodos?.fin})`}
+             value={`${Number(resultado.valor).toFixed(4)} ${resultado.unidad}`}
+             color="#fbbf24" />
+      )}
+
+      {!tieneReq && !loading && (
+        <Placeholder text="Selecciona dos nodos distintos y presiona Calcular R_eq." />
+      )}
+    </div>
+  );
+}
+
+// Leyes Fundamentales + Divisores
+
+function LeyesPanel({ resultado, loading, netlist, tieneFuenteVoltajeDC, tieneFuenteCorrienteDC, analisisError, onCalcularDivisorV, onCalcularDivisorI }) {
+  const [compId, setCompId] = useState('');
+
+  // Las flags vienen calculadas desde AccordionsCondicionales
+  const tienesFuenteVoltaje   = tieneFuenteVoltajeDC  ?? false;
+  const tienesFuenteCorriente = tieneFuenteCorrienteDC ?? false;
+
+  const tipoDivisor = resultado?.tipo; // divisor-voltaje | divisor-corriente
+
+  const inputStyle = {
+    background: '#1e1e2e', border: '1px solid #444', borderRadius: 4,
+    padding: '3px 7px', color: '#ccc', fontFamily: 'monospace', fontSize: 12, width: 100,
+  };
+
+  return (
+    <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+      {/* Leyes universales */}
+      <div style={{ background: '#1a1b1e', borderRadius: 6, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <ROW label="Ley de Ohm" value="V = I · R" color="#6c63ff" mono={false} />
+        <ROW label="KVL" value="ΣV = 0 (malla)" color="#6c63ff" mono={false} />
+        <ROW label="KCL" value="ΣI = 0 (nodo)" color="#6c63ff" mono={false} />
+        <ROW label="Potencia" value="P = V·I = I²R = V²/R" color="#6c63ff" mono={false} />
+      </div>
+
+      {/* Divisor de voltaje */}
+      {tienesFuenteVoltaje && (
+        <>
+          <p style={{ fontSize: 11, color: '#5a6278', margin: '4px 0 0', fontWeight: 500 }}>Divisor de voltaje</p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <label style={{ fontSize: 10, color: '#5a6278' }}>ID componente objetivo</label>
+              <input style={inputStyle} value={compId} onChange={(e) => setCompId(e.target.value)} placeholder="ej. R2" />
+            </div>
+            <CalcBtn onClick={() => onCalcularDivisorV(compId)} loading={loading && tipoDivisor === 'divisor-voltaje'}>
+              Calcular V_x
+            </CalcBtn>
+          </div>
+        </>
+      )}
+
+      {/* Divisor de corriente */}
+      {tienesFuenteCorriente && (
+        <>
+          <p style={{ fontSize: 11, color: '#5a6278', margin: '4px 0 0', fontWeight: 500 }}>Divisor de corriente</p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <label style={{ fontSize: 10, color: '#5a6278' }}>ID componente objetivo</label>
+              <input style={inputStyle} value={compId} onChange={(e) => setCompId(e.target.value)} placeholder="ej. R1" />
+            </div>
+            <CalcBtn onClick={() => onCalcularDivisorI(compId)} loading={loading && tipoDivisor === 'divisor-corriente'}>
+              Calcular I_x
+            </CalcBtn>
+          </div>
+        </>
+      )}
+
+      {/* Mensaje de validacion del backend */}
+      {analisisError && (
+        <p style={{ fontSize: 12, color: '#fbbf24', margin: '4px 0', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span>⚠</span> {analisisError}
+        </p>
+      )}
+
+      {/* Resultado divisor */}
+      {tipoDivisor === 'divisor-voltaje' && resultado && (
+        <ROW label={`Caída de voltaje en ${compId}`}
+             value={`${Number(resultado.voltajeCaida ?? 0).toFixed(4)} ${resultado.unidad}`}
+             color="#4ade80" />
+      )}
+      {tipoDivisor === 'divisor-corriente' && resultado && (
+        <ROW label={`Corriente en ${compId}`}
+             value={`${Number(resultado.corrienteCaida ?? 0).toFixed(4)} ${resultado.unidad}`}
+             color="#4ade80" />
+      )}
+
+      {!resultado && !loading && !tienesFuenteVoltaje && !tienesFuenteCorriente && (
+        <Placeholder text="Este circuito no tiene fuentes identificadas para aplicar divisores." />
+      )}
+    </div>
+  );
+}
+
+// Boton Simular AC con selector de barrido
+
+function ACSimularBtn({ isActive, isRunning, onSimular }) {
+  const [barrido,  setBarrido]  = useState('log');
+  const [fInicial, setFInicial] = useState('10');
+  const [fFinal,   setFFinal]   = useState('100000');
+  const [puntos,   setPuntos]   = useState('50');
+
+  const selectStyle = {
+    background: '#1e1e2e', border: '1px solid #444', borderRadius: 4,
+    padding: '3px 7px', color: '#ccc', fontSize: 11, fontFamily: 'monospace',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select style={selectStyle} value={barrido} onChange={(e) => setBarrido(e.target.value)}>
+          <option value="log">Logarítmico</option>
+          <option value="lineal">Lineal</option>
+          <option value="decada">Década</option>
+          <option value="octava">Octava</option>
+        </select>
+        <input style={{ ...selectStyle, width: 70 }} value={fInicial}
+          onChange={(e) => setFInicial(e.target.value)} placeholder="f ini (Hz)" />
+        <input style={{ ...selectStyle, width: 70 }} value={fFinal}
+          onChange={(e) => setFFinal(e.target.value)} placeholder="f fin (Hz)" />
+        <input style={{ ...selectStyle, width: 45 }} value={puntos}
+          onChange={(e) => setPuntos(e.target.value)} placeholder="pts" />
+        <button
+          className="control-btn"
+          disabled={!isActive || isRunning}
+          onClick={() => onSimular({
+            configuracion_ac: {
+              f_inicial: Number(fInicial),
+              f_final:   Number(fFinal),
+              puntos:    Number(puntos),
+              barrido,
+            },
+          })}
+        >
+          {isRunning ? '⏳ Simulando…' : '∿ Simular AC'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Transformacion de Fuente
+
+function TransformacionFuentePanel({ resultado, loading, error, netlist, onCalcular }) {
+  const [fuenteId, setFuenteId] = useState('');
+
+  // Extraer fuentes disponibles de la netlist para mostrarlas como opciones
+  const fuentes = (netlist ?? []).filter(
+    (c) => c?.type === 'fuente_voltaje' || c?.type === 'fuente_corriente'
+  );
+
+  const selectStyle = {
+    background: '#1e1e2e', border: '1px solid #444', borderRadius: 4,
+    padding: '4px 8px', color: '#ccc', fontFamily: 'monospace', fontSize: 12,
+  };
+
+  return (
+    <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 11, color: '#888' }}>Fuente a transformar</label>
+          {fuentes.length > 0 ? (
+            <select style={selectStyle} value={fuenteId} onChange={(e) => setFuenteId(e.target.value)}>
+              <option value="">Seleccionar…</option>
+              {fuentes.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.id} ({f.type === 'fuente_voltaje' ? 'Voltaje' : 'Corriente'})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              style={{ ...selectStyle, width: 100 }}
+              value={fuenteId}
+              onChange={(e) => setFuenteId(e.target.value)}
+              placeholder="ej. V1"
+            />
+          )}
+        </div>
+        <button
+          className="control-btn primary"
+          style={{ padding: '5px 14px', fontSize: 12 }}
+          disabled={loading || !fuenteId.trim()}
+          onClick={() => onCalcular(fuenteId.trim())}
+        >
+          {loading ? '⏳…' : '⇄ Transformar'}
+        </button>
+      </div>
+
+      {error && <p style={{ color: '#e74c3c', fontSize: 12, margin: 0 }}>⚠ {error}</p>}
+
+      {resultado && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <ROW label="Fuente original"        value={resultado.fuenteOriginal}                  color="#94a3b8" mono={false} />
+          <ROW label="Resistencia asociada"   value={resultado.resistenciaInvolucrada}           color="#94a3b8" mono={false} />
+          <ROW label="Tipo resultante"        value={resultado.transformacion?.tipo}             color="#a78bfa" mono={false} />
+          <ROW label="Nuevo valor de fuente"  value={`${Number(resultado.transformacion?.nuevoValorFuente ?? 0).toFixed(6)} ${resultado.transformacion?.unidad}`} color="#4ade80" />
+          <ROW label="Resistencia"            value={`${resultado.transformacion?.valorResistencia} Ω`} color="#fbbf24" />
+
+          {resultado.procedimiento?.length > 0 && (
+            <div style={{ marginTop: 4, borderTop: '1px solid #2a2a3a', paddingTop: 6 }}>
+              <p style={{ fontSize: 11, color: '#555', margin: '0 0 4px' }}>Procedimiento:</p>
+              {resultado.procedimiento.map((paso) => (
+                <PasoFormula key={paso.paso} paso={paso} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!resultado && !loading && !error && (
+        <p style={{ color: '#555', fontSize: 12, margin: 0 }}>
+          {fuentes.length === 0
+            ? 'No se detectaron fuentes en la netlist de este circuito.'
+            : 'Selecciona una fuente y presiona Transformar.'}
+        </p>
+      )}
     </div>
   );
 }

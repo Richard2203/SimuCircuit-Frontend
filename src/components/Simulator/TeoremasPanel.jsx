@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 /**
- * TeoremasPanel — Subpanel reutilizable para Thévenin/Norton y Superposición.
+ * TeoremasPanel — Subpanel reutilizable para Thevenin/Norton y Superposicion.
  * Se muestra dentro de un AccordionSection cuando el circuito tiene netlist.
  *
  * @param {{
@@ -12,6 +12,84 @@ import { useState } from 'react';
  *   onCalcular:  Function
  * }} props
  */
+/**
+ * Convierte el subconjunto de LaTeX que devuelve el backend a texto legible.
+ * Cubre: fracciones, subindices, superindices, simbolos griegos y unidades.
+ */
+function latexToText(str) {
+  if (!str) return '';
+  return str
+    // \frac{a}{b} → a / b
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1) / ($2)')
+    // subindices _{x} → x (en subscript)
+    .replace(/\_\{([^}]+)\}/g, (_, s) => s)
+    .replace(/\_([a-zA-Z0-9])/g, (_, s) => s)
+    // superindices ^{x} → ^x
+    .replace(/\^\{([^}]+)\}/g, '^$1')
+    .replace(/\^([a-zA-Z0-9])/g, '^$1')
+    // Simbolos griegos y matematicos
+    .replace(/\\Omega/g, 'Ω')
+    .replace(/\\omega/g, 'ω')
+    .replace(/\\alpha/g, 'α')
+    .replace(/\\beta/g,  'β')
+    .replace(/\\pi/g,    'π')
+    .replace(/\\infty/g, '∞')
+    .replace(/\\cdot/g,  '·')
+    .replace(/\\times/g, '×')
+    .replace(/\\approx/g,'≈')
+    .replace(/\\leq/g,   '≤')
+    .replace(/\\geq/g,   '≥')
+    .replace(/\\neq/g,   '≠')
+    // Limpiar llaves y backslashes sobrantes
+    .replace(/\{|\}/g, '')
+    .replace(/\\/g, '')
+    .trim();
+}
+
+function formatNums(str) {
+  return str.replace(/(-?\d+\.\d+)/g, (match) => {
+    const n = parseFloat(match);
+    if (Number.isInteger(n)) return String(n);
+    const s = n.toPrecision(5);
+    // Quitar ceros finales innecesarios
+    return parseFloat(s).toString();
+  });
+}
+
+function PasoFormula({ paso }) {
+  const texto = formatNums(latexToText(paso.eq ?? ''));
+  return (
+    <div style={{
+      padding: '6px 10px',
+      background: '#1a1b22',
+      borderRadius: 6,
+      borderLeft: '2px solid #6c63ff',
+      display: 'flex',
+      gap: 10,
+      alignItems: 'flex-start',
+    }}>
+      <span style={{ fontSize: 10, color: '#5a6278', minWidth: 16, paddingTop: 2 }}>
+        {paso.paso}.
+      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {paso.titulo && (
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+            {paso.titulo}
+          </span>
+        )}
+        <span style={{
+          fontSize: 13,
+          color: '#e2e8f0',
+          fontFamily: 'monospace',
+          letterSpacing: '0.02em',
+        }}>
+          {texto}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
   const [compId, setCompId]     = useState('');
   const [parametro, setParametro] = useState('voltaje');
@@ -86,48 +164,46 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
         <p style={{ color: '#e74c3c', fontSize: 12, margin: 0 }}>⚠ {error}</p>
       )}
 
-      {/* Resultado Thévenin/Norton */}
+      {/* Resultado Thevenin/Norton */}
       {tipo === 'thevenin-norton' && resultado && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <ResultRow label="V_th" value={`${resultado.thevenin?.Vth} ${resultado.thevenin?.unidadV}`} color="#6c63ff" />
-          <ResultRow label="R_th" value={`${resultado.thevenin?.Rth} ${resultado.thevenin?.unidadR}`} color="#6c63ff" />
-          <ResultRow label="I_n"  value={`${resultado.norton?.In} ${resultado.norton?.unidadI}`}       color="#4ade80" />
-          <ResultRow label="R_n"  value={`${resultado.norton?.Rn} ${resultado.norton?.unidadR}`}       color="#4ade80" />
-          <ResultRow label="P_max" value={`${resultado.maximaPotencia?.valor} ${resultado.maximaPotencia?.unidad}`} color="#fbbf24" />
+          <ResultRow label="V_th" value={`${Number(resultado.thevenin?.Vth ?? 0).toFixed(4)} ${resultado.thevenin?.unidadV}`} color="#6c63ff" />
+          <ResultRow label="R_th" value={`${Number(resultado.thevenin?.Rth ?? 0).toFixed(4)} ${resultado.thevenin?.unidadR}`} color="#6c63ff" />
+          <ResultRow label="I_n"  value={`${Number(resultado.norton?.In ?? 0).toFixed(6)} ${resultado.norton?.unidadI}`}       color="#4ade80" />
+          <ResultRow label="R_n"  value={`${Number(resultado.norton?.Rn ?? 0).toFixed(4)} ${resultado.norton?.unidadR}`}       color="#4ade80" />
+          <ResultRow label="P_max" value={`${Number(resultado.maximaPotencia?.valor ?? 0).toFixed(6)} ${resultado.maximaPotencia?.unidad}`} color="#fbbf24" />
 
           {resultado.procedimiento?.length > 0 && (
-            <div style={{ marginTop: 6, borderTop: '1px solid #333', paddingTop: 6 }}>
-              <p style={{ fontSize: 11, color: '#666', margin: '0 0 4px' }}>Procedimiento:</p>
+            <div style={{ marginTop: 8, borderTop: '1px solid #252830', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <p style={{ fontSize: 11, color: '#5a6278', margin: '0 0 4px', fontWeight: 500 }}>Procedimiento:</p>
               {resultado.procedimiento.map((paso) => (
-                <p key={paso.paso} style={{ fontSize: 12, color: '#aaa', margin: '2px 0', fontFamily: 'monospace' }}>
-                  {paso.paso}. {paso.eq}
-                </p>
+                <PasoFormula key={paso.paso} paso={paso} />
               ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Resultado Superposición */}
+      {/* Resultado Superposicion */}
       {tipo === 'superposicion' && resultado && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <ResultRow
             label={`${resultado.parametro === 'voltaje' ? 'V' : 'I'} total en ${resultado.componenteObjetivo}`}
-            value={`${resultado.valorTotal} ${resultado.unidad}`}
+            value={`${Number(resultado.valorTotal ?? 0).toFixed(4)} ${resultado.unidad}`}
             color="#fbbf24"
           />
           {resultado.aportaciones?.map((ap) => (
             <ResultRow
               key={ap.fuenteId}
               label={`Aporte de ${ap.fuenteId}`}
-              value={`${ap.valorAporte} ${resultado.unidad}`}
+              value={`${Number(ap.valorAporte ?? 0).toFixed(4)} ${resultado.unidad}`}
               color="#4ade80"
             />
           ))}
         </div>
       )}
 
-      {/* Placeholder vacío */}
+      {/* Placeholder vacio */}
       {!resultado && !loading && !error && (
         <p style={{ color: '#555', fontSize: 12, margin: 0 }}>
           Ingresa el ID del componente y presiona Calcular.

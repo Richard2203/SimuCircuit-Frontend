@@ -42,13 +42,12 @@ async function getCircuitos(params = {}) {
 
 /**
  * Obtiene un circuito completo por ID, incluyendo su netlist.
- * Devuelve un Circuit (no JSON envuelto).
- *
  * @param {number|string} id
  * @returns {Promise<Circuit>}
  */
 async function getCircuitoById(id) {
   const res = await apiClient.get(`/api/circuitos/${id}`);
+  console.log('Circuito API response:', JSON.stringify(res.data, null, 2));
   return Circuit.fromApiDetail(res.data);
 }
 

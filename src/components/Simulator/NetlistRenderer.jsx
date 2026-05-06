@@ -42,12 +42,9 @@ function getNodoNum(pinData) {
   return String(pinData);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Caculo de pines en SVG, replicando los offsets exactos de cada modelo.
 // Cada componente devuelve un mapa { pinKey -> {x,y} } en coordenadas SVG.
 // rotation se aplica como rotacion rigida alrededor del centro (cx, cy).
-// ─────────────────────────────────────────────────────────────────────────────
-
 function rotPt(cx, cy, dx, dy, rotDeg) {
   const r = (rotDeg * Math.PI) / 180;
   const c = Math.cos(r);
@@ -57,8 +54,6 @@ function rotPt(cx, cy, dx, dy, rotDeg) {
 
 /**
  * Pines de cada componente en SVG, alineados con el modelo visual real.
- * Devuelve TODOS los alias posibles para que el matcher de pines funcione
- * sin importar la convencion de nombres ("n1"/"a"/"pin1", "pos"/"a", etc.).
  */
 function getPins(comp) {
   const cx = parseFloat(comp.position?.x ?? 0) * CANVAS_SCALE + OFFSET_X;
@@ -69,7 +64,7 @@ function getPins(comp) {
   const t = comp.type;
 
   if (t === 'resistencia') {
-    // Resistor horizontal por defecto: pines a ±100*s = ±38px
+    // Resistor horizontal por defecto: pines a +-100*s = +-38px
     const arm = 100 * s;
     const a = rotPt(cx, cy, -arm, 0, rot);
     const b = rotPt(cx, cy,  arm, 0, rot);
@@ -142,7 +137,7 @@ function getPins(comp) {
     const esAC = (comp.params?.dcOrAc || '').toLowerCase() === 'ac';
 
     if (esAC) {
-      // ACSource: círculo con pines alineados al eje horizontal.
+      // ACSource: circulo con pines alineados al eje horizontal.
       const pinDist = (60 + 78) * s;
       const pos = rotPt(cx, cy,  pinDist, 0, rot);
       const neg = rotPt(cx, cy, -pinDist, 0, rot);
@@ -164,7 +159,7 @@ function getPins(comp) {
   }
 
   if (t === 'fuente_corriente') {
-    // CurrentSource: pos arriba, neg abajo a ±38px (en SVG, ya escalado).
+    // CurrentSource: pos arriba, neg abajo a +-38px
     const pos = rotPt(cx, cy, 0, -38, rot);
     const neg = rotPt(cx, cy, 0,  38, rot);
     return {
@@ -177,11 +172,9 @@ function getPins(comp) {
   if (t === 'diodo') {
     const esLED = (comp.params?.tipo || '').toLowerCase().startsWith('led');
     if (esLED) {
-      // LED vertical: pines salen hacia abajo
+      // LED vertical:
       //   pinAnodo  (anodo, +):  x - 15*s, y + 95*s   (izquierda)
       //   pinCatodo (catodo, −): x + 18*s, y + 95*s   (derecha)
-      // CRITICO: aplicar rotPt() para que la rotacion del componente
-      // mueva los pines correctamente (rot=90 los pone a la derecha).
       const a = rotPt(cx, cy, -15 * s, 95 * s, rot);
       const b = rotPt(cx, cy,  18 * s, 95 * s, rot);
       return {
@@ -191,7 +184,7 @@ function getPins(comp) {
         anodo: a, anode: a, catodo: b, cathode: b,
       };
     }
-    // Rectificador / Zener / Señal / Schottky: pines horizontales ±85*s
+    // Rectificador / Zener / Señal / Schottky: pines horizontales +-85*s
     const arm = 85 * s;
     const a = rotPt(cx, cy, -arm, 0, rot);
     const b = rotPt(cx, cy,  arm, 0, rot);
@@ -204,16 +197,14 @@ function getPins(comp) {
   }
 
 
-  // Transistores BJT/FET — paquete TO-92.
-  // El modelo TransistorTO92 dibuja el cuerpo arriba y las 3 patas saliendo
-  // HACIA ABAJO en linea (separación 15·s, longitud 60·s).
+  // Transistores BJT/FET — paquete TO-92
   //   Vista frontal (tipica del TO-92):  E — B — C  (de izq. a der.)
   if (t === 'transistor_bjt' || t === 'transistor_fet') {
     const dx = 15 * s, dy = 60 * s;
     const e = rotPt(cx, cy, -dx, dy, rot);
     const b = rotPt(cx, cy,   0, dy, rot);
     const c = rotPt(cx, cy,  dx, dy, rot);
-    // resolvePin() lowercasea las claves antes de buscar — todas en minusculas.
+    // resolvePin() lowercasea las claves antes de buscar
     return {
       // Nombres canonicos
       e, b, c,
@@ -227,36 +218,35 @@ function getPins(comp) {
       n1: e, n2: b, n3: c,
       'pin 1': e, 'pin 2': b, 'pin 3': c,
       pin1: e, pin2: b, pin3: c,
-      // Forma corta con prefijo "n" — backend manda nB/nC/nE → lowercase
+      // Forma corta con prefijo n
       nb: b, nc: c, ne: e, ng: b, nd: c, ns: e,
-      // Forma larga con prefijo "n" (por si el backend cambia la convencion)
+      // Forma larga con prefijo n
       nbase: b, ncolector: c, nemisor: e,
       ncollector: c, nemitter: e,
       ngate: b, ndrain: c, nsource: e,
     };
   }
 
-  // Regulador de voltaje — paquete TO-220 (LM7805, LM317…).
-  // Reutilizamos el modelo Transistor que tiene la silueta correcta.
+  // Regulador de voltaje — paquete TO-220 (LM7805, LM317...).
   // Pinout estandar (mirando de frente):  Vin — GND — Vout (de izq. a der.)
   if (t === 'regulador_voltaje') {
     const dx = 15 * s, dy = 60 * s;
-    const inn = rotPt(cx, cy, -dx, dy, rot);  // entrada → izquierda
-    const adj = rotPt(cx, cy,   0, dy, rot);  // GND/ADJ → centro
-    const out = rotPt(cx, cy,  dx, dy, rot);  // salida → derecha
-    // resolvePin() lowercasea las claves antes de buscar — todas en minusculas.
+    const inn = rotPt(cx, cy, -dx, dy, rot);  // entrada -> izquierda
+    const adj = rotPt(cx, cy,   0, dy, rot);  // GND/ADJ -> centro
+    const out = rotPt(cx, cy,  dx, dy, rot);  // salida -> derecha
+    // resolvePin() lowercasea las claves antes de buscar
     return {
       // Nombres canonicos del modelo
       in: inn, out, adj,
-      // Aliases lowercased del netlist del admin (que vienen como nIn/nOut/nGnd)
+      // Aliases lowercased del netlist del admin
       nin: inn, nout: out, ngnd: adj, nadj: adj,
       // Aliases en español
       entrada: inn, salida: out, tierra: adj, ref: adj,
-      // Aliases por numero de pin (para el caso pin_terminal = "Pin 1" etc.)
+      // Aliases por numero de pin
       n1: inn, n2: adj, n3: out,
       'pin 1': inn, 'pin 2': adj, 'pin 3': out,
       pin1: inn, pin2: adj, pin3: out,
-      // Aliases vin/vout (por si el backend los manda así)
+      // Aliases vin/vout
       vin: inn, vout: out,
     };
   }
@@ -266,8 +256,7 @@ function getPins(comp) {
 }
 
 /**
- * Resuelve el pin SVG correcto para una clave dada, tolerante a variaciones
- * ("Pin 1" → "pin1" → "n1"), espacios y mayúsculas.
+ * Resuelve el pin SVG correcto para una clave dada.
  */
 function resolvePin(pins, pinKey) {
   if (!pinKey) return null;
@@ -276,7 +265,7 @@ function resolvePin(pins, pinKey) {
   // Match exacto primero
   if (pins[k]) return pins[k];
 
-  // Match sin espacios (ej: "Pin 1" → "pin1")
+  // Match sin espacios
   const compact = k.replace(/\s+/g, '');
   if (pins[compact]) return pins[compact];
 
@@ -324,10 +313,8 @@ function calcViewBox(netlist) {
   return `${minX - margin} ${minY - margin} ${w} ${h}`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Calculo de bounding boxes de componentes para evitar que los rieles
 // horizontales atraviesen cuerpos.
-// ─────────────────────────────────────────────────────────────────────────────
 function getComponentBBox(comp) {
   const cx = parseFloat(comp.position?.x ?? 0) * CANVAS_SCALE + OFFSET_X;
   const cy = parseFloat(comp.position?.y ?? 0) * CANVAS_SCALE + OFFSET_Y;
@@ -402,11 +389,10 @@ function getComponentBBox(comp) {
     return rotatedBBox(30 * SCALE_DEFAULT, 50 * SCALE_DEFAULT);
   }
   // Transistor BJT/FET — paquete TO-92: cuerpo redondo + 3 patas hacia abajo.
-  // El cuerpo mide ~35×35 a scale=1; las patas se extienden 60 hacia abajo.
   if (t === 'transistor_bjt' || t === 'transistor_fet') {
     const halfW = 22 * SCALE_TO92;
     const halfH = 65 * SCALE_TO92;  // incluye el espacio que ocupan las patas
-    // CRÍTICO: rotar las esquinas alrededor de (cx,cy) — el mismo pivote que
+    // CRITICO: rotar las esquinas alrededor de (cx,cy) — el mismo pivote que
     // usa wrapRotation visualmente — no alrededor de (cx, cyBody).
     const offY = halfH - 22 * SCALE_TO92;
     const corners = [
@@ -480,10 +466,7 @@ function busVCollides(busX, y1, y2, bboxes, excludeIds = new Set()) {
   return false;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Helpers para construir cables ortogonales
-// ─────────────────────────────────────────────────────────────────────────────
-
 /**
  * Construye una L-shape entre dos puntos eligiendo la "esquina" optima.
  * Devuelve dos segmentos [seg1, seg2] o un unico segmento si comparten X o Y.
@@ -493,11 +476,11 @@ function buildLPath(p1, p2, bboxes, excludeIds) {
   const dx = Math.abs(p2.x - p1.x);
   const dy = Math.abs(p2.y - p1.y);
 
-  // Mismo X → barra vertical
+  // Mismo X -> barra vertical
   if (dx < 1.5) {
     return [{ x1: p1.x, y1: p1.y, x2: p1.x, y2: p2.y }];
   }
-  // Mismo Y → barra horizontal
+  // Mismo Y -> barra horizontal
   if (dy < 1.5) {
     return [{ x1: p1.x, y1: p1.y, x2: p2.x, y2: p1.y }];
   }
@@ -551,18 +534,15 @@ function buildLPath(p1, p2, bboxes, excludeIds) {
   return optA;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // WireLayer — Cables ortogonales que conectan en los terminales reales.
-//
 // Algoritmo:
-//   • 2 pines  → L-shape (con desvio en Z si ambos codos chocan).
-//   • 3+ pines → Peine ortogonal: barra horizontal a Y modal/mediana
+//   2 pines  -> L-shape (con desvio en Z si ambos codos chocan).
+//   3+ pines -> Peine ortogonal: barra horizontal a Y modal/mediana
 //                + stubs verticales desde cada pin.
-//   • GND      → barra al ymax (riel inferior).
-//   • Si la barra atraviesa un componente que NO pertenece al nodo,
+//   GND      -> barra al ymax (riel inferior).
+//   Si la barra atraviesa un componente que NO pertenece al nodo,
 //     se mueve hacia arriba o abajo hasta encontrar una banda libre.
-//   • Solo segmentos H/V — nunca diagonales. 
-// ─────────────────────────────────────────────────────────────────────────────
+//   Solo segmentos H/V — nunca diagonales. 
 function WireLayer({ netlist }) {
 
   // 1) Recolectar pines por nodo y bboxes de componentes
@@ -596,7 +576,7 @@ function WireLayer({ netlist }) {
 
     const ownCompIds = new Set(pins.map((p) => p.compId));
 
-    // ── Caso 2 pines: L-shape (con anti-colision) ──
+    // Caso 2 pines: L-shape (con anti-colision)
     if (pins.length === 2 && !isGnd) {
       const segs = buildLPath(pins[0], pins[1], allBBoxes, ownCompIds);
       segs.forEach((seg, i) => {
@@ -616,7 +596,7 @@ function WireLayer({ netlist }) {
     const xRange = Math.max(...xs) - Math.min(...xs);
     const yRange = Math.max(...ys) - Math.min(...ys);
 
-    // ── Caso 1: barra vertical (todos comparten X) ──
+    // Caso 1: barra vertical (todos comparten X)
     if (xRange < 4 && yRange > 4) {
       const x0 = pins[0].x;
       const ymin = Math.min(...ys);
@@ -631,7 +611,7 @@ function WireLayer({ netlist }) {
       return;
     }
 
-    // ── Caso 2: barra horizontal (todos comparten Y) ──
+    // Caso 2: barra horizontal (todos comparten Y)
     if (yRange < 4 && xRange > 4) {
       const y0 = pins[0].y;
       const xmin = Math.min(...xs);
@@ -646,7 +626,7 @@ function WireLayer({ netlist }) {
       return;
     }
 
-    // ── Caso 3 (general, 3+ pines): peine ortogonal ──
+    // Caso 3 (general, 3+ pines): peine ortogonal
     let busY;
     if (isGnd) {
       // GND siempre va al riel inferior, BAJO los cuerpos de los componentes
@@ -682,12 +662,12 @@ function WireLayer({ netlist }) {
     const xmin = Math.min(...xs);
     const xmax = Math.max(...xs);
 
-    // ── Anti-colision: si la barra atraviesa cuerpos no-propios, moverla.
+    // Anti-colision: si la barra atraviesa cuerpos no-propios, moverla.
     if (!isGnd && busHCollides(busY, xmin, xmax, allBBoxes, ownCompIds)) {
       const CLEARANCE = 24;
       let bestY = null;
 
-      // Estrategia A: rangos Y "grandes" (>=80) → bus por encima del pin mas alto
+      // Estrategia A: rangos Y "grandes" (>=80) -> bus por encima del pin mas alto
       if (yRange >= 80) {
         const yMinPin = Math.min(...ys);
         const candidate = yMinPin - CLEARANCE;
@@ -863,10 +843,6 @@ function renderComponent(comp, energized = false) {
     case 'diodo': {
       const esLED = (comp.params?.tipo || '').toLowerCase().startsWith('led');
       if (esLED) {
-        // El "value" del LED es su COLOR (ej. 'VERDE', 'ROJO').
-        // IMPORTANTE: el LED maneja su propia rotación INTERNAMENTE — NO se
-        // envuelve en wrapRotation porque eso causaba desincronización entre
-        // las patas dibujadas y los pines reportados por getPins().
         return (
           <g key={comp.id}>
             <LED x={x} y={y} scale={SCALE_DEFAULT} rotation={rotation}
@@ -879,7 +855,7 @@ function renderComponent(comp, energized = false) {
       return (
         <g key={comp.id} transform={wrapRotation}>
           <DiodoRectificador x={x} y={y} scale={SCALE_DEFAULT} orientation={orientation}
-            componentId={comp.id} initialValue={valueNum} />
+            componentId={comp.id} initialValue={comp.value} />
         </g>
       );
     }
@@ -887,16 +863,14 @@ function renderComponent(comp, energized = false) {
     case 'transistor_fet':
       return (
         <g key={comp.id} transform={wrapRotation}>
-          <TransistorTO92 x={x} y={y} scale={SCALE_TO92} componentId={comp.id} />
+          <TransistorTO92 x={x} y={y} scale={SCALE_TO92} componentId={comp.id} initialValue={comp.value}/>
         </g>
       );
     case 'regulador_voltaje': {
-      // Mostrar voltaje de salida (ej: 5V para LM7805) en lugar de β
-      const vOut = parseFloat(comp.params?.voltaje_salida ?? comp.value ?? 5) || 5;
       return (
         <g key={comp.id} transform={wrapRotation}>
           <Transistor x={x} y={y} scale={SCALE_TO220} componentId={comp.id}
-            labelType="vreg" initialValue={vOut} />
+            labelType="vreg" initialValue={comp.value} />
         </g>
       );
     }

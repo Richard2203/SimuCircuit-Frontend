@@ -9,12 +9,13 @@ import { Circuit }            from '../domain';
 /**
  * SimuCircuitMediator — Pattern: Mediator
  * Hub central que coordina toda la comunicacion entre componentes.
+ *
  * Eventos publicados al bus:
  *   - STATE_CHANGED        -> cuando el estado global cambia
- *   - SIM_TICK             -> cada segundo mientras la simulación está activa
+ *   - SIM_TICK             -> cada segundo mientras la simulacion esta activa
  *   - circuito:cargado     -> cuando se carga el detalle + netlist de un circuito
  *   - filtros:actualizados -> cuando se obtienen filtros desde la API
- *   - simulacion:iniciada  -> justo antes de llamar a la API de simulación
+ *   - simulacion:iniciada  -> justo antes de llamar a la API de simulacion
  *   - simulacion:completada-> cuando la API devuelve resultados
  *   - simulacion:error     -> si la API devuelve un error
  */
@@ -36,6 +37,7 @@ const INITIAL_STATE = {
   componentesCatalogo: [],
   teoremaResultado: null,
   analisisResultado: null,    // ultimo resultado de /api/analisis/*
+  analisisError: null,       // error de validacion de /api/analisis/*
   filters: {
     search: '',
     difficulty: '',
@@ -71,7 +73,7 @@ class SimuCircuitMediator {
     switch (action) {
 
       case 'SELECT_CIRCUIT': {
-        // Aceptar tanto un Circuit como JSON crudo (compat con datasets locales).
+        // Aceptar tanto un Circuit como JSON crudo
         const circuit = payload instanceof Circuit
           ? payload
           : Circuit.fromAny(payload);
@@ -155,7 +157,7 @@ class SimuCircuitMediator {
         break;
 
       case 'SET_NETLIST': {
-        // payload es un Component[] o JSON crudo. 
+        // payload es un Component[] o JSON crudo.
         const newNetlist = payload ?? [];
         this._state.netlist = newNetlist;
         if (this._state.selectedCircuit) {
@@ -190,7 +192,7 @@ class SimuCircuitMediator {
 
   /**
    * Busca circuitos en la API segun los filtros activos.
-   * @param {object} [params] - Parametros de busqueda opcionales 
+   * @param {object} [params]
    */
   async buscarCircuitos(params = {}) {
     this._setLoading('circuitos', true);
@@ -391,12 +393,12 @@ class SimuCircuitMediator {
   /**
    * Ejecuta el analisis nodal DC completo.
    * Internamente usa simularDC pero almacena el resultado en analisisResultado
-   * con tipo nodal para que los accordions lo puedan consumir.
+   * con tipo 'nodal' para que los accordions lo puedan consumir. 
    */
   async calcularNodal() {
     const netlistJSON = this._netlistParaBackend(this._state.netlist);
     this._setLoading('analisisNodal', true);
-    this._state.simError = null;
+    this._state.analisisError = null;
     try {
       const resultado = await SimulacionService.simularDC({
         netlist: netlistJSON,
@@ -404,7 +406,7 @@ class SimuCircuitMediator {
       });
       this._state.analisisResultado = { tipo: 'nodal', ...resultado };
     } catch (err) {
-      this._state.simError = err.message;
+      this._state.analisisError = err.message;
       console.error('[Mediator] Error en análisis nodal:', err);
     } finally {
       this._setLoading('analisisNodal', false);
@@ -423,7 +425,7 @@ class SimuCircuitMediator {
       delta_t: cfg.delta_t ?? 0.0005,
     };
     this._setLoading('analisisTransitorio', true);
-    this._state.simError = null;
+    this._state.analisisError = null;
     try {
       const resultado = await AnalisisService.calcularTransitorio({
         netlist: netlistJSON,
@@ -431,7 +433,7 @@ class SimuCircuitMediator {
       });
       this._state.analisisResultado = { tipo: 'transitorio', puntos: resultado };
     } catch (err) {
-      this._state.simError = err.message;
+      this._state.analisisError = err.message;
       console.error('[Mediator] Error en análisis transitorio:', err);
     } finally {
       this._setLoading('analisisTransitorio', false);
@@ -446,7 +448,7 @@ class SimuCircuitMediator {
   async calcularResistenciaEquivalente(opciones = {}) {
     const netlistJSON = this._netlistParaBackend(this._state.netlist);
     this._setLoading('analisisReq', true);
-    this._state.simError = null;
+    this._state.analisisError = null;
     try {
       const resultado = await AnalisisService.calcularResistenciaEquivalente({
         netlist: netlistJSON,
@@ -456,7 +458,7 @@ class SimuCircuitMediator {
       });
       this._state.analisisResultado = { tipo: 'resistencia-equivalente', ...resultado };
     } catch (err) {
-      this._state.simError = err.message;
+      this._state.analisisError = err.message;
       console.error('[Mediator] Error en Req:', err);
     } finally {
       this._setLoading('analisisReq', false);
@@ -471,7 +473,7 @@ class SimuCircuitMediator {
   async calcularDivisorVoltaje(opciones = {}) {
     const netlistJSON = this._netlistParaBackend(this._state.netlist);
     this._setLoading('analisisDivisor', true);
-    this._state.simError = null;
+    this._state.analisisError = null;
     try {
       const resultado = await AnalisisService.calcularDivisorVoltaje({
         netlist: netlistJSON,
@@ -480,7 +482,7 @@ class SimuCircuitMediator {
       });
       this._state.analisisResultado = { tipo: 'divisor-voltaje', ...resultado };
     } catch (err) {
-      this._state.simError = err.message;
+      this._state.analisisError = err.message;
       console.error('[Mediator] Error en divisor de voltaje:', err);
     } finally {
       this._setLoading('analisisDivisor', false);
@@ -495,7 +497,7 @@ class SimuCircuitMediator {
   async calcularDivisorCorriente(opciones = {}) {
     const netlistJSON = this._netlistParaBackend(this._state.netlist);
     this._setLoading('analisisDivisor', true);
-    this._state.simError = null;
+    this._state.analisisError = null;
     try {
       const resultado = await AnalisisService.calcularDivisorCorriente({
         netlist: netlistJSON,
@@ -504,7 +506,7 @@ class SimuCircuitMediator {
       });
       this._state.analisisResultado = { tipo: 'divisor-corriente', ...resultado };
     } catch (err) {
-      this._state.simError = err.message;
+      this._state.analisisError = err.message;
       console.error('[Mediator] Error en divisor de corriente:', err);
     } finally {
       this._setLoading('analisisDivisor', false);
@@ -512,7 +514,7 @@ class SimuCircuitMediator {
     this._bus.publish('STATE_CHANGED', this.getState());
   }
 
-  // Helpers privados 
+  // Helpers privados
 
   /**
    * Convierte la netlist de instancias Component al formato plano que espera el backend.
@@ -527,7 +529,7 @@ class SimuCircuitMediator {
       // Si ya es un objeto plano (no instancia), convertir nodes si es necesario
       const raw = typeof c?.toBackendJSON === 'function' ? c.toBackendJSON() : { ...c };
 
-      // Normalizar nodes: { pin: { nodo, x, y } } -> { pin: "nodoString" }
+      // Normalizar nodes: { pin: { nodo, x, y } } → { pin: "nodoString" }
       const nodes = {};
       Object.entries(raw.nodes ?? {}).forEach(([pin, val]) => {
         nodes[pin] = typeof val === 'object' ? String(val.nodo ?? '') : String(val);
