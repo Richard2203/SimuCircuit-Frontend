@@ -10,7 +10,7 @@ export const TransistorTO92 = ({
   scale = COMPONENT_SCALE.transistorTO92,
   // Value props
   componentId,
-  initialValue = 100, // Beta (hFE)
+  initialValue,
   onValueChange,
 }) => {
   const id = componentId || `transistorTO92-${x}-${y}`;
@@ -81,7 +81,7 @@ export const TransistorTO92 = ({
           <line x1="-10" y1="10" x2="10" y2="10"/>
         </g>
 
-        {/* β value label */}
+        {/* value label */}
         <ComponentValueLabel
           componentId={id}
           type="bjt"

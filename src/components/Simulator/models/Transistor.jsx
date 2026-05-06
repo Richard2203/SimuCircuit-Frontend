@@ -10,8 +10,7 @@ export const Transistor = ({
   scale = COMPONENT_SCALE.transistor,
   // Value props
   componentId,
-  initialValue = 100, // Beta (hFE) por defecto cuando es BJT;
-                      // se sobrescribe con voltaje_salida cuando se usa como regulador.
+  initialValue, 
   labelType = 'bjt', // 'bjt' (β) | 'vreg' (V de salida)
   onValueChange,
 }) => {
@@ -68,7 +67,7 @@ export const Transistor = ({
           <line x1="-15" y1="8" x2="15" y2="8"/>
         </g>
 
-        {/* Value label: β para BJT, V para regulador */}
+        {/* Value label */}
         <ComponentValueLabel
           componentId={id}
           type={labelType}

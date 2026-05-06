@@ -12,7 +12,7 @@ export const DiodoRectificador = ({
   scale = COMPONENT_SCALE.diodoRectificador,
   // Value props
   componentId,
-  initialValue = 0.7,  // 0.7V forward voltage drop (SI = Volts)
+  initialValue, 
   onValueChange,
 }) => {
   const id = componentId || `diodo-${x}-${y}`;
@@ -53,7 +53,7 @@ export const DiodoRectificador = ({
         <rect x="-60" y="-25" width="120" height="50" rx="8" fill="#2a2a2a"/>
         <rect x="-40" y="-25" width="15"  height="50" fill="#66747d"/>
 
-        {/* Value label — Vf */}
+        {/* Value label */}
         <ComponentValueLabel
           componentId={id}
           type="diode"

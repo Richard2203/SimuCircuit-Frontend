@@ -15,16 +15,24 @@ export const PowerSource = ({
   initialValue = 12,   // 12V default in SI (Volts)
   onValueChange,
 }) => {
+  const clampVoltage = (val) => {
+    const num = parseFloat(val);
+    if (isNaN(num)) return 0;
+    return Math.min(23, Math.max(-23, num));
+  };
+
+  const safeInitial = clampVoltage(initialValue);
   const id = componentId || `power-${x}-${y}`;
-  const [value, setValue] = useComponentValue(id, initialValue);
+  const [value, setValue] = useComponentValue(id, safeInitial);
   const [hovered, setHovered] = useState(false);
 
   const pinA = { x: x + 575 * scale, y: y + 68 * scale };
   const pinB = { x: x + 585 * scale, y: y + 220 * scale };
 
   const handleValueChange = (newVal) => {
-    setValue(newVal);
-    onValueChange?.(newVal);
+    const clamped = clampVoltage(newVal);
+    setValue(clamped);
+    onValueChange?.(clamped);
   };
 
   // Build display label from live value — e.g. "12V DC"

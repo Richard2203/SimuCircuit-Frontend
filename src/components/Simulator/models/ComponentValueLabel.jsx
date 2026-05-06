@@ -1,6 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import eventBus from '../../../core/EventBus';
 
+
+const READONLY_TYPES = new Set([
+  'regulador_voltaje',
+  'diodo',
+  'diode',
+  'bjt',
+  'fet',
+  'vreg',       // si ya usas vreg
+]);
+
 // ─── Notation parser ────────────────────────────────────────────────────────
 
 const SUFFIX_MAP = {
@@ -71,12 +81,12 @@ export const COMPONENT_CONSTRAINTS = {
   capacitor:  { min: 1e-6, max: 10e-3, unit: 'F',  label: '1 µF – 10,000 µF',
                 displayUnit: 'µF', displayDivisor: 1e-6 },
   inductor:   { min: 1e-6, max: 10,    unit: 'H',  label: '1 µH – 10 H' },
-  voltageSource: { min: 0, max: 1000,  unit: 'V',  label: '0 V – 1000 V' },
+  voltageSource: { min: -23, max: 23,  unit: 'V',  label: '-23 V – 23 V' },
   currentSource: { min: 0, max: 100,   unit: 'A',  label: '0 A – 100 A' },
-  diode:      { min: 0.2,  max: 1.2,   unit: 'V',  label: '0.2 V – 1.2 V' },
-  bjt:        { min: 20,   max: 500,   unit: 'β',  label: 'β 20 – 500' },
-  fet:        { min: 1,    max: 20,    unit: 'V',  label: '1 V – 20 V (Vgs)' },
-  vreg:       { min: 1.2,  max: 48,    unit: 'V',  label: '1.2 V – 48 V' },
+  diode:      { min: -Infinity,  max: Infinity,   unit: '',  label: 'Valor Fijo' },
+  bjt:        { min: -Infinity,  max: Infinity,   unit: '',  label: 'Valor Fijo' },
+  fet:        { min: -Infinity,  max: Infinity,   unit: '',  label: 'Valor Fijo' },
+  vreg:       { min: -Infinity,  max: Infinity,   unit: '',  label: 'Valor Fijo' },
   // fallback
   generic:    { min: -Infinity, max: Infinity, unit: '', label: 'cualquier valor' },
 };
@@ -121,6 +131,8 @@ export function ComponentValueLabel({
   const [showTooltip, setShowTooltip] = useState(false);
   const [hovered, setHovered] = useState(false);
   const inputRef = useRef(null);
+
+  const isReadOnly = READONLY_TYPES.has(type);
 
   // Format display label
   const displayLabel = (() => {
@@ -212,52 +224,68 @@ export function ComponentValueLabel({
       {/* Clickable value label */}
       {!editing && (
         <g>
-          {/* Hover highlight pill */}
-          {hovered && (
-            <rect
-              x={textAnchor === 'middle' ? x - 38 : textAnchor === 'end' ? x - 76 : x - 4}
-              y={y - fontSize * 0.85}
-              width={80}
-              height={fontSize * 1.6}
-              rx={4}
-              fill="rgba(97,218,251,0.08)"
-              stroke="rgba(97,218,251,0.3)"
-              strokeWidth={0.8}
-              style={{ pointerEvents: 'none' }}
-            />
-          )}
-          <text
-            x={x}
-            y={y}
-            fontSize={fontSize}
-            fill={labelColor}
-            fontFamily="'JetBrains Mono', 'Fira Code', 'Courier New', monospace"
-            textAnchor={textAnchor}
-            style={{
-              userSelect: 'none',
-              transition: 'fill 0.15s',
-              paintOrder: 'stroke',
-              stroke: 'rgba(0,0,0,0.5)',
-              strokeWidth: 3,
-            }}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            onClick={(e) => { e.stopPropagation(); startEditing(); }}
-          >
-            {displayLabel}
-          </text>
-          {/* Edit pencil icon hint */}
-          {hovered && (
+          {isReadOnly ? (
             <text
-              x={textAnchor === 'end' ? x - 78 : x + 44}
+              x={x}
               y={y}
-              fontSize={9}
-              fill="rgba(97,218,251,0.7)"
-              fontFamily="sans-serif"
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
+              fontSize={fontSize}
+              fill={fill}
+              fontFamily="'JetBrains Mono', 'Fira Code', monospace"
+              textAnchor={textAnchor}
+              style={{ userSelect: 'none' }}
             >
-              ✎
+              {value}
             </text>
+          ) : (
+            <>
+              {/* Hover highlight pill */}
+              {hovered && (
+                <rect
+                  x={textAnchor === 'middle' ? x - 38 : textAnchor === 'end' ? x - 76 : x - 4}
+                  y={y - fontSize * 0.85}
+                  width={80}
+                  height={fontSize * 1.6}
+                  rx={4}
+                  fill="rgba(97,218,251,0.08)"
+                  stroke="rgba(97,218,251,0.3)"
+                  strokeWidth={0.8}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )}
+              <text
+                x={x}
+                y={y}
+                fontSize={fontSize}
+                fill={labelColor}
+                fontFamily="'JetBrains Mono', 'Fira Code', monospace"
+                textAnchor={textAnchor}
+                style={{
+                  userSelect: 'none',
+                  transition: 'fill 0.15s',
+                  paintOrder: 'stroke',
+                  stroke: 'rgba(0,0,0,0.5)',
+                  strokeWidth: 3,
+                }}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
+                onClick={(e) => { e.stopPropagation(); startEditing(); }}
+              >
+                {displayLabel}
+              </text>
+              {/* Edit pencil */}
+              {hovered && (
+                <text
+                  x={textAnchor === 'end' ? x - 78 : x + 44}
+                  y={y}
+                  fontSize={9}
+                  fill="rgba(97,218,251,0.7)"
+                  fontFamily="sans-serif"
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  ✎
+                </text>
+              )}
+            </>
           )}
         </g>
       )}
