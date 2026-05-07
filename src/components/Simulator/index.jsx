@@ -8,9 +8,11 @@ import { WaveformChart }      from './WaveformChart';
 import { SimulatorSidebar }   from './SimulatorSidebar';
 import { TeoremasPanel }      from './TeoremasPanel';
 import { Circuit }            from '../../domain';
+import { CircuitEditProvider } from '../../core/CircuitEditContext';
 
 /**
  * Simulator — Vista del simulador para un circuito seleccionado.
+ *
  * @param {{ state: object, dispatch: Function, api: object }} props
  */
 export function Simulator({ state, dispatch, api }) {
@@ -97,7 +99,9 @@ export function Simulator({ state, dispatch, api }) {
 
             <div className="circuit-svg-wrap" ref={svgContainerRef}>
               <button className="export-btn" onClick={exportToPNG}>↓ Exportar PNG</button>
-              <CircuitSVG circuit={c} energized={isActive} />
+              <CircuitEditProvider locked={isActive}>
+                <CircuitSVG circuit={c} energized={isActive} />
+              </CircuitEditProvider>
             </div>
 
             {/* Controles visuales (timer local) */}
@@ -273,8 +277,8 @@ export function Simulator({ state, dispatch, api }) {
 // Reglas derivadas de los JSONs del backend y las rutas disponibles:
 //
 //  Analisis Nodal DC     -> circuito tiene fuente DC (tieneDC)
-//  Análisis Transitorio  -> tiene capacitor o bobina + fuente DC
-//  Cálculos Generales    -> tiene resistencias (R > 0)
+//  Analisis Transitorio  -> tiene capacitor o bobina + fuente DC
+//  Calculos Generales    -> tiene resistencias (R > 0)
 //  Leyes Fundamentales   -> siempre (KVL/KCL) + divisor V si solo fuente_voltaje DC
 //                          + divisor I si tiene fuente_corriente
 //  Thevenin / Norton     -> DC + ≥2 resistencias + sin transistores/reguladores
@@ -405,7 +409,9 @@ function AccordionsCondicionales({
   );
 }
 
-// Helpers de formato LaTeX -> texto legible
+// Sub-paneles de los accordions
+
+// Helpers de formato LaTeX → texto legible
 
 function latexToText(str) {
   if (!str) return '';
@@ -648,11 +654,11 @@ function GeneralPanel({ resultado, loading, netlist, analisisError, onCalcularRe
 function LeyesPanel({ resultado, loading, netlist, tieneFuenteVoltajeDC, tieneFuenteCorrienteDC, analisisError, onCalcularDivisorV, onCalcularDivisorI }) {
   const [compId, setCompId] = useState('');
 
-  // Las flags vienen calculadas desde AccordionsCondicionales
+  // Las flags vienen calculadas desde AccordionsCondicionales (ya filtradas a DC)
   const tienesFuenteVoltaje   = tieneFuenteVoltajeDC  ?? false;
   const tienesFuenteCorriente = tieneFuenteCorrienteDC ?? false;
 
-  const tipoDivisor = resultado?.tipo; // divisor-voltaje | divisor-corriente
+  const tipoDivisor = resultado?.tipo; // 'divisor-voltaje' | 'divisor-corriente'
 
   const inputStyle = {
     background: '#1e1e2e', border: '1px solid #444', borderRadius: 4,

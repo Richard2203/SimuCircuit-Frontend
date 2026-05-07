@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useContext } from 'react';
+import { CircuitEditContext } from '../../../core/CircuitEditContext';
 import eventBus from '../../../core/EventBus';
 
 
@@ -8,10 +9,10 @@ const READONLY_TYPES = new Set([
   'diode',
   'bjt',
   'fet',
-  'vreg',       // si ya usas vreg
+  'vreg',
 ]);
 
-// ─── Notation parser ────────────────────────────────────────────────────────
+// Notation parser
 
 const SUFFIX_MAP = {
   t: 1e12, g: 1e9, meg: 1e6, k: 1e3, m: 1e-3,
@@ -19,18 +20,15 @@ const SUFFIX_MAP = {
 };
 
 /**
- * Parses engineering notation strings into a numeric value.
- * Examples: "10k" → 10000, "4.7u" → 4.7e-6, "1e-6" → 1e-6, "100" → 100
+ * Conversion de notacion de ingeneria a notacion de string (SI)
  */
 export function parseNotation(str) {
   if (str === null || str === undefined || str === '') return NaN;
   const s = String(str).trim().toLowerCase();
 
-  // Try plain number first (including scientific notation like 1e-6)
   const plain = parseFloat(s);
   if (!isNaN(plain) && /^[+-]?[\d.]+([eE][+-]?\d+)?$/.test(s)) return plain;
 
-  // Try "number + suffix" like 10k, 4.7u, 100meg
   const match = s.match(/^([+-]?[\d.]+(?:[eE][+-]?\d+)?)\s*(t|g|meg|k|m|µ|u|n|p|f)?$/);
   if (!match) return NaN;
 
@@ -40,12 +38,10 @@ export function parseNotation(str) {
   return num * multiplier;
 }
 
-// ─── Value formatter ─────────────────────────────────────────────────────────
+// Value formatter
 
 /**
- * Formats a raw numeric value into a human-readable engineering string.
- * formatValue(10000, 'Ω') → "10kΩ"
- * formatValue(0.0001, 'F') → "100µF"
+ * Conversion de numeracion cruda (SI) a notacion de ingenieria legible.
  */
 export function formatValue(value, unit = '') {
   if (value === null || value === undefined || isNaN(value)) return `—${unit}`;
@@ -65,7 +61,6 @@ export function formatValue(value, unit = '') {
   for (const tier of tiers) {
     if (abs >= tier.threshold) {
       const scaled = value / tier.divisor;
-      // Up to 3 significant digits, trim trailing zeros
       const formatted = parseFloat(scaled.toPrecision(3));
       return `${formatted}${tier.prefix}${unit}`;
     }
@@ -74,43 +69,27 @@ export function formatValue(value, unit = '') {
   return `${parseFloat(scaled.toPrecision(3))}p${unit}`;
 }
 
-// ─── Per-component constraints ────────────────────────────────────────────────
+// Per-component constraints
 
 export const COMPONENT_CONSTRAINTS = {
-  resistor:   { min: 1,    max: 10e6,  unit: 'Ω',  label: '1 Ω – 10 MΩ' },
-  capacitor:  { min: 1e-6, max: 10e-3, unit: 'F',  label: '1 µF – 10,000 µF',
-                displayUnit: 'µF', displayDivisor: 1e-6 },
-  inductor:   { min: 1e-6, max: 10,    unit: 'H',  label: '1 µH – 10 H' },
-  voltageSource: { min: -23, max: 23,  unit: 'V',  label: '-23 V – 23 V' },
-  currentSource: { min: 0, max: 100,   unit: 'A',  label: '0 A – 100 A' },
-  diode:      { min: -Infinity,  max: Infinity,   unit: '',  label: 'Valor Fijo' },
-  bjt:        { min: -Infinity,  max: Infinity,   unit: '',  label: 'Valor Fijo' },
-  fet:        { min: -Infinity,  max: Infinity,   unit: '',  label: 'Valor Fijo' },
-  vreg:       { min: -Infinity,  max: Infinity,   unit: '',  label: 'Valor Fijo' },
-  // fallback
-  generic:    { min: -Infinity, max: Infinity, unit: '', label: 'cualquier valor' },
+  resistor:      { min: 1,       max: 10e6,  unit: 'Ω', label: '1 Ω – 10 MΩ' },
+  capacitor:     { min: 0.5e-12, max: 100e-6, unit: 'F', label: '0.5 pF – 100 µF' },
+  inductor:      { min: 1e-6,   max: 10,    unit: 'H', label: '1 µH – 10 H' },
+  voltageSource: { min: -23,    max: 23,    unit: 'V', label: '-23 V – 23 V' },
+  currentSource: { min: 0,      max: 100,   unit: 'A', label: '0 A – 100 A' },
+  diode:   { min: -Infinity, max: Infinity, unit: '', label: 'Valor Fijo' },
+  bjt:     { min: -Infinity, max: Infinity, unit: '', label: 'Valor Fijo' },
+  fet:     { min: -Infinity, max: Infinity, unit: '', label: 'Valor Fijo' },
+  vreg:    { min: -Infinity, max: Infinity, unit: '', label: 'Valor Fijo' },
+  generic: { min: -Infinity, max: Infinity, unit: '', label: 'cualquier valor' },
 };
 
 function getConstraint(type) {
   return COMPONENT_CONSTRAINTS[type] || COMPONENT_CONSTRAINTS.generic;
 }
 
-// ─── ComponentValueLabel ──────────────────────────────────────────────────────
+// ComponentValueLabel
 
-/**
- * Props:
- *  componentId  {string}  - unique id for this component instance
- *  type         {string}  - key in COMPONENT_CONSTRAINTS
- *  value        {number}  - current numeric value in SI units
- *  onChange     {fn}      - (newValueSI: number) => void
- *  x            {number}  - SVG x for the label anchor
- *  y            {number}  - SVG y for the label anchor
- *  textAnchor   {string}  - 'start' | 'middle' | 'end'
- *  fontSize     {number}
- *  fill         {string}  - default text color
- *  rotate       {number}  - counter-rotation to keep label upright
- *  svgRef       {ref}     - ref to the parent <svg> element (for foreignObject sizing)
- */
 export function ComponentValueLabel({
   componentId,
   type = 'generic',
@@ -133,32 +112,22 @@ export function ComponentValueLabel({
   const inputRef = useRef(null);
 
   const isReadOnly = READONLY_TYPES.has(type);
+  const { locked } = useContext(CircuitEditContext);
 
-  // Format display label
-  const displayLabel = (() => {
-    if (type === 'capacitor') {
-      const uf = value / 1e-6;
-      return `${parseFloat(uf.toPrecision(4))}µF`;
-    }
-    return formatValue(value, constraint.unit);
-  })();
+  // Display label: use formatValue for all types
+  const displayLabel = formatValue(value, constraint.unit);
 
+  // Validate: parseNotation already returns SI
   const validate = useCallback((str) => {
-    const parsed = parseNotation(str);
-    if (isNaN(parsed)) return false;
-    // For capacitor, user inputs in µF so convert
-    const si = type === 'capacitor' ? parsed * 1e-6 : parsed;
+    const si = parseNotation(str);
+    if (isNaN(si)) return false;
     return si >= constraint.min && si <= constraint.max;
-  }, [type, constraint]);
+  }, [constraint]);
 
   const startEditing = () => {
-    // Seed with current value in user-friendly units
-    let seed;
-    if (type === 'capacitor') {
-      seed = String(parseFloat((value / 1e-6).toPrecision(4)));
-    } else {
-      seed = String(value);
-    }
+    if (locked) return;
+    // Seed with current value formatted in engineering notation
+    const seed = formatValue(value, '');
     setInputVal(seed);
     setValid(true);
     setShowTooltip(false);
@@ -166,9 +135,8 @@ export function ComponentValueLabel({
   };
 
   const commit = useCallback(() => {
-    const parsed = parseNotation(inputVal);
-    if (isNaN(parsed)) { cancel(); return; }
-    const si = type === 'capacitor' ? parsed * 1e-6 : parsed;
+    const si = parseNotation(inputVal);
+    if (isNaN(si)) { cancel(); return; }
     if (si < constraint.min || si > constraint.max) {
       setValid(false);
       setShowTooltip(true);
@@ -177,9 +145,8 @@ export function ComponentValueLabel({
     setEditing(false);
     setShowTooltip(false);
     onChange?.(si);
-    // Publish so mediator / other observers can react
     eventBus.publish('COMPONENT_VALUE_CHANGED', { id: componentId, type, value: si });
-  }, [inputVal, type, constraint, onChange, componentId]);
+  }, [inputVal, constraint, onChange, componentId, type]);
 
   const cancel = () => {
     setEditing(false);
@@ -206,9 +173,7 @@ export function ComponentValueLabel({
     setShowTooltip(false);
   };
 
-  // The foreignObject input box
   const FOW = 90, FOH = 26;
-  // Offset so it appears at the label position
   const foX = textAnchor === 'middle' ? x - FOW / 2
             : textAnchor === 'end'   ? x - FOW
             : x;
@@ -219,52 +184,34 @@ export function ComponentValueLabel({
   return (
     <g
       transform={rotate ? `rotate(${rotate}, ${x}, ${y})` : undefined}
-      style={{ cursor: editing ? 'text' : 'pointer' }}
+      style={{ cursor: locked ? 'not-allowed' : editing ? 'text' : 'pointer' }}
     >
-      {/* Clickable value label */}
       {!editing && (
         <g>
           {isReadOnly ? (
-            <text
-              x={x}
-              y={y}
-              fontSize={fontSize}
-              fill={fill}
+            <text x={x} y={y} fontSize={fontSize} fill={fill}
               fontFamily="'JetBrains Mono', 'Fira Code', monospace"
-              textAnchor={textAnchor}
-              style={{ userSelect: 'none' }}
-            >
+              textAnchor={textAnchor} style={{ userSelect: 'none' }}>
               {value}
             </text>
           ) : (
             <>
-              {/* Hover highlight pill */}
               {hovered && (
                 <rect
                   x={textAnchor === 'middle' ? x - 38 : textAnchor === 'end' ? x - 76 : x - 4}
                   y={y - fontSize * 0.85}
-                  width={80}
-                  height={fontSize * 1.6}
-                  rx={4}
+                  width={80} height={fontSize * 1.6} rx={4}
                   fill="rgba(97,218,251,0.08)"
-                  stroke="rgba(97,218,251,0.3)"
-                  strokeWidth={0.8}
+                  stroke="rgba(97,218,251,0.3)" strokeWidth={0.8}
                   style={{ pointerEvents: 'none' }}
                 />
               )}
-              <text
-                x={x}
-                y={y}
-                fontSize={fontSize}
-                fill={labelColor}
+              <text x={x} y={y} fontSize={fontSize} fill={labelColor}
                 fontFamily="'JetBrains Mono', 'Fira Code', monospace"
                 textAnchor={textAnchor}
                 style={{
-                  userSelect: 'none',
-                  transition: 'fill 0.15s',
-                  paintOrder: 'stroke',
-                  stroke: 'rgba(0,0,0,0.5)',
-                  strokeWidth: 3,
+                  userSelect: 'none', transition: 'fill 0.15s',
+                  paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.5)', strokeWidth: 3,
                 }}
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
@@ -272,16 +219,11 @@ export function ComponentValueLabel({
               >
                 {displayLabel}
               </text>
-              {/* Edit pencil */}
               {hovered && (
                 <text
-                  x={textAnchor === 'end' ? x - 78 : x + 44}
-                  y={y}
-                  fontSize={9}
-                  fill="rgba(97,218,251,0.7)"
-                  fontFamily="sans-serif"
-                  style={{ pointerEvents: 'none', userSelect: 'none' }}
-                >
+                  x={textAnchor === 'end' ? x - 78 : x + 44} y={y}
+                  fontSize={9} fill="rgba(97,218,251,0.7)" fontFamily="sans-serif"
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}>
                   ✎
                 </text>
               )}
@@ -290,17 +232,10 @@ export function ComponentValueLabel({
         </g>
       )}
 
-      {/* Inline editor via foreignObject */}
       {editing && (
         <foreignObject x={foX} y={foY} width={FOW} height={FOH} overflow="visible">
-          <div
-            xmlns="http://www.w3.org/1999/xhtml"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-            }}
-          >
+          <div xmlns="http://www.w3.org/1999/xhtml"
+            style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <input
               ref={inputRef}
               value={inputVal}
@@ -308,43 +243,28 @@ export function ComponentValueLabel({
               onKeyDown={handleKeyDown}
               onBlur={commit}
               style={{
-                width: FOW - 4,
-                height: FOH - 2,
-                padding: '2px 5px',
+                width: FOW - 4, height: FOH - 2, padding: '2px 5px',
                 fontSize: fontSize + 1,
                 fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 background: '#1e1e2e',
                 color: valid ? '#a6e22e' : '#f92672',
                 border: `1.5px solid ${valid ? '#a6e22e' : '#f92672'}`,
-                borderRadius: 4,
-                outline: 'none',
-                boxSizing: 'border-box',
+                borderRadius: 4, outline: 'none', boxSizing: 'border-box',
                 boxShadow: valid
                   ? '0 0 6px rgba(166,226,46,0.4)'
                   : '0 0 6px rgba(249,38,114,0.4)',
                 transition: 'border-color 0.15s, color 0.15s, box-shadow 0.15s',
               }}
             />
-            {/* Error tooltip */}
             {showTooltip && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: FOH + 2,
-                  left: 0,
-                  whiteSpace: 'nowrap',
-                  background: '#2d1b2e',
-                  color: '#f92672',
-                  border: '1px solid #f92672',
-                  borderRadius: 4,
-                  padding: '2px 6px',
-                  fontSize: 10,
-                  fontFamily: 'sans-serif',
-                  zIndex: 9999,
-                  pointerEvents: 'none',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                }}
-              >
+              <div style={{
+                position: 'absolute', top: FOH + 2, left: 0,
+                whiteSpace: 'nowrap', background: '#2d1b2e',
+                color: '#f92672', border: '1px solid #f92672',
+                borderRadius: 4, padding: '2px 6px', fontSize: 10,
+                fontFamily: 'sans-serif', zIndex: 9999,
+                pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+              }}>
                 Rango: {constraint.label}
               </div>
             )}

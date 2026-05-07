@@ -8,7 +8,7 @@ import { Circuit }            from '../domain';
 
 /**
  * SimuCircuitMediator — Pattern: Mediator
- * Hub central que coordina toda la comunicacion entre componentes.
+ * Hub central que coordina toda la comunicación entre componentes.
  *
  * Eventos publicados al bus:
  *   - STATE_CHANGED        -> cuando el estado global cambia
@@ -37,7 +37,7 @@ const INITIAL_STATE = {
   componentesCatalogo: [],
   teoremaResultado: null,
   analisisResultado: null,    // ultimo resultado de /api/analisis/*
-  analisisError: null,       // error de validacion de /api/analisis/*
+  analisisError: null,       // error de validacio de /api/analisis/*
   filters: {
     search: '',
     difficulty: '',
@@ -60,6 +60,23 @@ class SimuCircuitMediator {
       loading: {},
     };
     this._timer = null;
+
+    // Escuchar cambios de valor editados directamente en el SVG
+    eventBus.subscribe('COMPONENT_VALUE_CHANGED', ({ id, value }) => {
+      const netlist = this._state.netlist;
+      if (!Array.isArray(netlist)) return;
+      const idx = netlist.findIndex((c) => (c?.id ?? c?.componentId) === id);
+      if (idx === -1) return;
+      const comp = netlist[idx];
+      // Actualizar value tanto en objeto plano como en instancia de Component
+      const updated = typeof comp?.clone === 'function'
+        ? comp.withValue(String(value))
+        : { ...comp, value: String(value) };
+      const newNetlist = [...netlist];
+      newNetlist[idx] = updated;
+      this._state.netlist = newNetlist;
+      this._bus.publish('STATE_CHANGED', this.getState());
+    });
   }
 
   /** Retorna una copia superficial del estado actual. */
@@ -192,8 +209,8 @@ class SimuCircuitMediator {
 
   /**
    * Busca circuitos en la API segun los filtros activos.
-   * @param {object} [params]
-   */
+   * @param {object} [params] - Parametros de busqueda opcionales
+   */ 
   async buscarCircuitos(params = {}) {
     this._setLoading('circuitos', true);
     try {
@@ -392,9 +409,7 @@ class SimuCircuitMediator {
 
   /**
    * Ejecuta el analisis nodal DC completo.
-   * Internamente usa simularDC pero almacena el resultado en analisisResultado
-   * con tipo 'nodal' para que los accordions lo puedan consumir. 
-   */
+   */ 
   async calcularNodal() {
     const netlistJSON = this._netlistParaBackend(this._state.netlist);
     this._setLoading('analisisNodal', true);
@@ -514,7 +529,7 @@ class SimuCircuitMediator {
     this._bus.publish('STATE_CHANGED', this.getState());
   }
 
-  // Helpers privados
+  // ─── Helpers privados ────────────────────────────────────────
 
   /**
    * Convierte la netlist de instancias Component al formato plano que espera el backend.

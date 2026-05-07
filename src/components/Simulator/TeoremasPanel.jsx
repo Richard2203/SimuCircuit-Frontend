@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 /**
- * TeoremasPanel — Subpanel reutilizable para Thevenin/Norton y Superposicion.
+ * TeoremasPanel — Subpanel reutilizable para Thévenin/Norton y Superposición.
  * Se muestra dentro de un AccordionSection cuando el circuito tiene netlist.
  *
  * @param {{
@@ -14,20 +14,20 @@ import { useState } from 'react';
  */
 /**
  * Convierte el subconjunto de LaTeX que devuelve el backend a texto legible.
- * Cubre: fracciones, subindices, superindices, simbolos griegos y unidades.
+ * Cubre: fracciones, subíndices, superíndices, símbolos griegos y unidades.
  */
 function latexToText(str) {
   if (!str) return '';
   return str
     // \frac{a}{b} → a / b
     .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1) / ($2)')
-    // subindices _{x} → x (en subscript)
+    // subíndices _{x} → x (en subscript)
     .replace(/\_\{([^}]+)\}/g, (_, s) => s)
     .replace(/\_([a-zA-Z0-9])/g, (_, s) => s)
-    // superindices ^{x} → ^x
+    // superíndices ^{x} → ^x
     .replace(/\^\{([^}]+)\}/g, '^$1')
     .replace(/\^([a-zA-Z0-9])/g, '^$1')
-    // Simbolos griegos y matematicos
+    // Símbolos griegos y matemáticos
     .replace(/\\Omega/g, 'Ω')
     .replace(/\\omega/g, 'ω')
     .replace(/\\alpha/g, 'α')
@@ -46,10 +46,15 @@ function latexToText(str) {
     .trim();
 }
 
+/**
+ * Formatea un número dentro de un string: recorta decimales innecesarios.
+ * "12.0000000000" → "12", "615.2988403211" → "615.2988", "0.0195027184" → "0.01950"
+ */
 function formatNums(str) {
   return str.replace(/(-?\d+\.\d+)/g, (match) => {
     const n = parseFloat(match);
     if (Number.isInteger(n)) return String(n);
+    // Máximo 5 cifras significativas después del punto
     const s = n.toPrecision(5);
     // Quitar ceros finales innecesarios
     return parseFloat(s).toString();
@@ -164,7 +169,7 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
         <p style={{ color: '#e74c3c', fontSize: 12, margin: 0 }}>⚠ {error}</p>
       )}
 
-      {/* Resultado Thevenin/Norton */}
+      {/* Resultado Thévenin/Norton */}
       {tipo === 'thevenin-norton' && resultado && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <ResultRow label="V_th" value={`${Number(resultado.thevenin?.Vth ?? 0).toFixed(4)} ${resultado.thevenin?.unidadV}`} color="#6c63ff" />
@@ -184,26 +189,35 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
         </div>
       )}
 
-      {/* Resultado Superposicion */}
+      {/* Resultado Superposición */}
       {tipo === 'superposicion' && resultado && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Backend devuelve: { total, aportaciones, procedimiento } */}
           <ResultRow
-            label={`${resultado.parametro === 'voltaje' ? 'V' : 'I'} total en ${resultado.componenteObjetivo}`}
-            value={`${Number(resultado.valorTotal ?? 0).toFixed(4)} ${resultado.unidad}`}
+            label={`${parametro === 'voltaje' ? 'V' : 'I'} total en ${compId}`}
+            value={`${Number(resultado.total ?? 0).toFixed(4)} ${parametro === 'voltaje' ? 'V' : 'A'}`}
             color="#fbbf24"
           />
           {resultado.aportaciones?.map((ap) => (
             <ResultRow
               key={ap.fuenteId}
               label={`Aporte de ${ap.fuenteId}`}
-              value={`${Number(ap.valorAporte ?? 0).toFixed(4)} ${resultado.unidad}`}
+              value={`${Number(ap.valorAporte ?? 0).toFixed(4)} ${parametro === 'voltaje' ? 'V' : 'A'}`}
               color="#4ade80"
             />
           ))}
+          {resultado.procedimiento?.length > 0 && (
+            <div style={{ marginTop: 8, borderTop: '1px solid #252830', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <p style={{ fontSize: 11, color: '#5a6278', margin: '0 0 4px', fontWeight: 500 }}>Procedimiento:</p>
+              {resultado.procedimiento.map((paso) => (
+                <PasoFormula key={paso.paso} paso={paso} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Placeholder vacio */}
+      {/* Placeholder vacío */}
       {!resultado && !loading && !error && (
         <p style={{ color: '#555', fontSize: 12, margin: 0 }}>
           Ingresa el ID del componente y presiona Calcular.
