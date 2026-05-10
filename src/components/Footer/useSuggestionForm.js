@@ -51,7 +51,7 @@ export function useSuggestionForm() {
     setErrorMessage('');
 
     try {
-      /* Paso 1: subir imagen (si existe) */
+      /* Paso 1: subir imagen */
       let photoUrl = '';
       if (form.foto) {
         setStatus('uploading');
@@ -66,7 +66,7 @@ export function useSuggestionForm() {
         photoUrl,
       });
 
-      /* Éxito: limpiar formulario */
+      /* Exito: limpiar formulario */
       setStatus('success');
       setForm(INITIAL_FORM);
       if (fileRef.current) fileRef.current.value = '';
