@@ -7,8 +7,9 @@ import { AdminLogin }           from './components/admin/login/AdminLogin';
 import { AdminRecuperacion }    from './components/admin/login/AdminRecuperacion';
 import { AdminPanel }           from './components/admin/panel/AdminPanel';
 import { authService }          from './services/admin/authService';
+import { Footer }               from './components/Footer';
 
-/* ── Sesion del administrador (persistida en sessionStorage) ── */
+/* Sesion del administrador */
 
 const SESSION_KEY = 'admin_session';
 
@@ -25,16 +26,16 @@ function clearAdminSession() {
   sessionStorage.removeItem(SESSION_KEY);
 }
 
-/* ── App principal ──────────────────────────────────────────── */
+/* App principal */
 
 /**
  * App — Raiz de la aplicacion.
  *
  * Routing con react-router-dom:
- *   /admin/login         → AdminLogin
- *   /admin/recuperacion  → AdminRecuperacion
- *   /admin/panel         → AdminPanel (requiere sesión, sino → /admin/login)
- *   /*                   → Simulador / Biblioteca (flujo principal)
+ *   /admin/login         -> AdminLogin
+ *   /admin/recuperacion  -> AdminRecuperacion
+ *   /admin/panel         -> AdminPanel (requiere sesión, sino -> /admin/login)
+ *   /*                   -> Simulador / Biblioteca (flujo principal)
  *
  */
 export default function App() {
@@ -72,23 +73,26 @@ export default function App() {
   );
 }
 
-/* ── Guard de autenticacion ─────────────────────────────────── */
+/* Guard de autenticacion */
 
 function RequireAuth({ session, children }) {
   if (!session) return <Navigate to="/admin/login" replace />;
   return children;
 }
 
-/* ── Vista principal del simulador ──────────────────────────── */
+/* Vista principal del simulador */
 
 function MainSimulator() {
   const { state, dispatch, api } = useMediator();
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d0d' }}>
-      {state.selectedCircuit
-        ? <Simulator state={state} dispatch={dispatch} api={api} />
-        : <Library   state={state} dispatch={dispatch} api={api} />
-      }
-    </div>
+     <div style={{ minHeight: '100vh', background: '#0d0d0d', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1 }}>
+            {state.selectedCircuit
+              ? <Simulator state={state} dispatch={dispatch} api={api} />
+              : <Library   state={state} dispatch={dispatch} api={api} />
+            }
+          </div>
+          <Footer />
+        </div>
   );
 }
