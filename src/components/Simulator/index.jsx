@@ -9,6 +9,16 @@ import { SimulatorSidebar }   from './SimulatorSidebar';
 import { TeoremasPanel }      from './TeoremasPanel';
 import { Circuit }            from '../../domain';
 import { CircuitEditProvider } from '../../core/CircuitEditContext';
+import { formatValue }        from './models/ComponentValueLabel.jsx';
+
+/* Helpers de formato: notacion de ingenieria
+ * Delegamos en formatValue (mismo formateador del canvas SVG) para
+ * consistencia total en toda la app.
+ */
+const fmtV    = (v)         => formatValue(Number(v), 'V');
+const fmtA    = (v)         => formatValue(Number(v), 'A');
+const fmtOhm  = (v)         => formatValue(Number(v), 'Ω');
+const fmtAuto = (v, unit='') => formatValue(Number(v), unit);
 
 /**
  * Simulator — Vista del simulador para un circuito seleccionado.
@@ -198,7 +208,7 @@ export function Simulator({ state, dispatch, api }) {
                     <p key={nodo} style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
                       <span style={{ color: '#64748b' }}>V(nodo {nodo})</span>{' '}
                       <span style={{ color: '#a78bfa', fontFamily: 'monospace', fontWeight: 600 }}>
-                        {Number(v).toFixed(4)} V
+                        {fmtV(v)}
                       </span>
                     </p>
                   ))}
@@ -206,7 +216,7 @@ export function Simulator({ state, dispatch, api }) {
                     <p key={id} style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
                       <span style={{ color: '#64748b' }}>I({id})</span>{' '}
                       <span style={{ color: '#4ade80', fontFamily: 'monospace', fontWeight: 600 }}>
-                        {Number(i).toFixed(6)} A
+                        {fmtA(i)}
                       </span>
                     </p>
                   ))}
@@ -228,8 +238,8 @@ export function Simulator({ state, dispatch, api }) {
                   Resultado AC — {simResultadoAC.length} puntos de frecuencia
                 </p>
                 <p style={{ fontSize: 12, color: '#aaa' }}>
-                  f={simResultadoAC[0]?.frecuencia}Hz →{' '}
-                  f={simResultadoAC[simResultadoAC.length - 1]?.frecuencia}Hz
+                  f={formatValue(simResultadoAC[0]?.frecuencia, 'Hz')} →{' '}
+                  f={formatValue(simResultadoAC[simResultadoAC.length - 1]?.frecuencia, 'Hz')}
                 </p>
               </div>
             )}
@@ -281,9 +291,9 @@ export function Simulator({ state, dispatch, api }) {
 //  Calculos Generales    -> tiene resistencias (R > 0)
 //  Leyes Fundamentales   -> siempre (KVL/KCL) + divisor V si solo fuente_voltaje DC
 //                          + divisor I si tiene fuente_corriente
-//  Thevenin / Norton     -> DC + ≥2 resistencias + sin transistores/reguladores
-//  Superposicion         -> DC + ≥2 fuentes independientes
-//  Transformacion Fuente -> DC + exactamente 1 fuente + ≥1 resistencia adyacente
+//  Thevenin / Norton     -> DC + >=2 resistencias + sin transistores/reguladores
+//  Superposicion         -> DC + >=2 fuentes independientes
+//  Transformacion Fuente -> DC + exactamente 1 fuente + >=1 resistencia adyacente
 
 function AccordionsCondicionales({
   c, state, dispatch, api,
@@ -411,7 +421,7 @@ function AccordionsCondicionales({
 
 // Sub-paneles de los accordions
 
-// Helpers de formato LaTeX → texto legible
+// Helpers de formato LaTeX -> texto legible
 
 function latexToText(str) {
   if (!str) return '';
@@ -436,6 +446,7 @@ function formatNums(str) {
   return str.replace(/(-?\d+\.\d+)/g, (match) => {
     const n = parseFloat(match);
     if (Number.isInteger(n)) return String(n);
+
     return parseFloat(n.toPrecision(5)).toString();
   });
 }
@@ -495,13 +506,13 @@ function NodalPanel({ resultado, loading, onCalcular }) {
         <>
           <p style={{ fontSize: 11, color: '#5a6278', margin: '4px 0 0', fontWeight: 500 }}>Voltajes nodales</p>
           {Object.entries(voltages).map(([nodo, v]) => (
-            <ROW key={nodo} label={`V(nodo ${nodo})`} value={`${Number(v).toFixed(4)} V`} color="#a78bfa" />
+            <ROW key={nodo} label={`V(nodo ${nodo})`} value={`${fmtV(v)}`} color="#a78bfa" />
           ))}
           {Object.keys(currents).length > 0 && (
             <>
               <p style={{ fontSize: 11, color: '#5a6278', margin: '4px 0 0', fontWeight: 500 }}>Corrientes de rama</p>
               {Object.entries(currents).map(([id, i]) => (
-                <ROW key={id} label={`I(${id})`} value={`${Number(i).toFixed(6)} A`} color="#4ade80" />
+                <ROW key={id} label={`I(${id})`} value={`${fmtA(i)}`} color="#4ade80" />
               ))}
             </>
           )}
@@ -565,10 +576,10 @@ function TransitorioPanel({ resultado, loading, tieneReactivos, onCalcular }) {
                 t = {p.tiempo} s ({idx === 0 ? 'inicio' : 'fin'})
               </p>
               {Object.entries(p.voltajes ?? {}).map(([n, v]) => (
-                <ROW key={n} label={`V(${n})`} value={`${Number(v).toFixed(4)} V`} color="#a78bfa" />
+                <ROW key={n} label={`V(${n})`} value={`${fmtV(v)}`} color="#a78bfa" />
               ))}
               {Object.entries(p.corrientes ?? {}).map(([id, i]) => (
-                <ROW key={id} label={`I(${id})`} value={`${Number(i).toFixed(6)} A`} color="#4ade80" />
+                <ROW key={id} label={`I(${id})`} value={`${fmtA(i)}`} color="#4ade80" />
               ))}
             </div>
           ))}
@@ -638,7 +649,7 @@ function GeneralPanel({ resultado, loading, netlist, analisisError, onCalcularRe
 
       {tieneReq && (
         <ROW label={`R_eq (nodo ${resultado.nodos?.inicio} → ${resultado.nodos?.fin})`}
-             value={`${Number(resultado.valor).toFixed(4)} ${resultado.unidad}`}
+             value={fmtAuto(resultado.valor, resultado.unidad)}
              color="#fbbf24" />
       )}
 
@@ -654,7 +665,6 @@ function GeneralPanel({ resultado, loading, netlist, analisisError, onCalcularRe
 function LeyesPanel({ resultado, loading, netlist, tieneFuenteVoltajeDC, tieneFuenteCorrienteDC, analisisError, onCalcularDivisorV, onCalcularDivisorI }) {
   const [compId, setCompId] = useState('');
 
-  // Las flags vienen calculadas desde AccordionsCondicionales (ya filtradas a DC)
   const tienesFuenteVoltaje   = tieneFuenteVoltajeDC  ?? false;
   const tienesFuenteCorriente = tieneFuenteCorrienteDC ?? false;
 
@@ -718,12 +728,12 @@ function LeyesPanel({ resultado, loading, netlist, tieneFuenteVoltajeDC, tieneFu
       {/* Resultado divisor */}
       {tipoDivisor === 'divisor-voltaje' && resultado && (
         <ROW label={`Caída de voltaje en ${compId}`}
-             value={`${Number(resultado.voltajeCaida ?? 0).toFixed(4)} ${resultado.unidad}`}
+             value={fmtAuto(resultado.voltajeCaida ?? 0, resultado.unidad)}
              color="#4ade80" />
       )}
       {tipoDivisor === 'divisor-corriente' && resultado && (
         <ROW label={`Corriente en ${compId}`}
-             value={`${Number(resultado.corrienteCaida ?? 0).toFixed(4)} ${resultado.unidad}`}
+             value={fmtAuto(resultado.corrienteCaida ?? 0, resultado.unidad)}
              color="#4ade80" />
       )}
 
@@ -837,7 +847,7 @@ function TransformacionFuentePanel({ resultado, loading, error, netlist, onCalcu
           <ROW label="Fuente original"        value={resultado.fuenteOriginal}                  color="#94a3b8" mono={false} />
           <ROW label="Resistencia asociada"   value={resultado.resistenciaInvolucrada}           color="#94a3b8" mono={false} />
           <ROW label="Tipo resultante"        value={resultado.transformacion?.tipo}             color="#a78bfa" mono={false} />
-          <ROW label="Nuevo valor de fuente"  value={`${Number(resultado.transformacion?.nuevoValorFuente ?? 0).toFixed(6)} ${resultado.transformacion?.unidad}`} color="#4ade80" />
+          <ROW label="Nuevo valor de fuente"  value={fmtAuto(resultado.transformacion?.nuevoValorFuente ?? 0, resultado.transformacion?.unidad ?? '')} color="#4ade80" />
           <ROW label="Resistencia"            value={`${resultado.transformacion?.valorResistencia} Ω`} color="#fbbf24" />
 
           {resultado.procedimiento?.length > 0 && (

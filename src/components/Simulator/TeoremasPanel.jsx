@@ -1,7 +1,15 @@
 import { useState } from 'react';
+import { formatValue } from './models/ComponentValueLabel.jsx';
+
+/* Helpers de formato */
+const fmtV    = (v)          => formatValue(Number(v), 'V');
+const fmtA    = (v)          => formatValue(Number(v), 'A');
+const fmtOhm  = (v)          => formatValue(Number(v), 'Ω');
+const fmtW    = (v)          => formatValue(Number(v), 'W');
+const fmtAuto = (v, unit='') => formatValue(Number(v), unit);
 
 /**
- * TeoremasPanel — Subpanel reutilizable para Thévenin/Norton y Superposición.
+ * TeoremasPanel — Subpanel reutilizable para Thevenin/Norton y Superposicion.
  * Se muestra dentro de un AccordionSection cuando el circuito tiene netlist.
  *
  * @param {{
@@ -14,20 +22,20 @@ import { useState } from 'react';
  */
 /**
  * Convierte el subconjunto de LaTeX que devuelve el backend a texto legible.
- * Cubre: fracciones, subíndices, superíndices, símbolos griegos y unidades.
+ * Cubre: fracciones, subindices, superindices, simbolos griegos y unidades.
  */
 function latexToText(str) {
   if (!str) return '';
   return str
-    // \frac{a}{b} → a / b
+    // \frac{a}{b} -> a / b
     .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1) / ($2)')
-    // subíndices _{x} → x (en subscript)
+    // subindices _{x} -> x (en subscript)
     .replace(/\_\{([^}]+)\}/g, (_, s) => s)
     .replace(/\_([a-zA-Z0-9])/g, (_, s) => s)
-    // superíndices ^{x} → ^x
+    // superindices ^{x} -> ^x
     .replace(/\^\{([^}]+)\}/g, '^$1')
     .replace(/\^([a-zA-Z0-9])/g, '^$1')
-    // Símbolos griegos y matemáticos
+    // Simbolos griegos y matematicos
     .replace(/\\Omega/g, 'Ω')
     .replace(/\\omega/g, 'ω')
     .replace(/\\alpha/g, 'α')
@@ -47,14 +55,13 @@ function latexToText(str) {
 }
 
 /**
- * Formatea un número dentro de un string: recorta decimales innecesarios.
- * "12.0000000000" → "12", "615.2988403211" → "615.2988", "0.0195027184" → "0.01950"
+ * Formatea un numero dentro de un string: recorta decimales innecesarios.
  */
 function formatNums(str) {
   return str.replace(/(-?\d+\.\d+)/g, (match) => {
     const n = parseFloat(match);
     if (Number.isInteger(n)) return String(n);
-    // Máximo 5 cifras significativas después del punto
+    // Maximo 5 cifras significativas despues del punto
     const s = n.toPrecision(5);
     // Quitar ceros finales innecesarios
     return parseFloat(s).toString();
@@ -169,14 +176,14 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
         <p style={{ color: '#e74c3c', fontSize: 12, margin: 0 }}>⚠ {error}</p>
       )}
 
-      {/* Resultado Thévenin/Norton */}
+      {/* Resultado Thevenin/Norton */}
       {tipo === 'thevenin-norton' && resultado && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <ResultRow label="V_th" value={`${Number(resultado.thevenin?.Vth ?? 0).toFixed(4)} ${resultado.thevenin?.unidadV}`} color="#6c63ff" />
-          <ResultRow label="R_th" value={`${Number(resultado.thevenin?.Rth ?? 0).toFixed(4)} ${resultado.thevenin?.unidadR}`} color="#6c63ff" />
-          <ResultRow label="I_n"  value={`${Number(resultado.norton?.In ?? 0).toFixed(6)} ${resultado.norton?.unidadI}`}       color="#4ade80" />
-          <ResultRow label="R_n"  value={`${Number(resultado.norton?.Rn ?? 0).toFixed(4)} ${resultado.norton?.unidadR}`}       color="#4ade80" />
-          <ResultRow label="P_max" value={`${Number(resultado.maximaPotencia?.valor ?? 0).toFixed(6)} ${resultado.maximaPotencia?.unidad}`} color="#fbbf24" />
+          <ResultRow label="V_th" value={fmtAuto(resultado.thevenin?.Vth ?? 0, resultado.thevenin?.unidadV ?? 'V')} color="#6c63ff" />
+          <ResultRow label="R_th" value={fmtAuto(resultado.thevenin?.Rth ?? 0, resultado.thevenin?.unidadR ?? 'Ω')} color="#6c63ff" />
+          <ResultRow label="I_n"  value={fmtAuto(resultado.norton?.In ?? 0, resultado.norton?.unidadI ?? 'A')} color="#4ade80" />
+          <ResultRow label="R_n"  value={fmtAuto(resultado.norton?.Rn ?? 0, resultado.norton?.unidadR ?? 'Ω')} color="#4ade80" />
+          <ResultRow label="P_max" value={fmtAuto(resultado.maximaPotencia?.valor ?? 0, resultado.maximaPotencia?.unidad ?? 'W')} color="#fbbf24" />
 
           {resultado.procedimiento?.length > 0 && (
             <div style={{ marginTop: 8, borderTop: '1px solid #252830', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -189,20 +196,20 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
         </div>
       )}
 
-      {/* Resultado Superposición */}
+      {/* Resultado Superposicion */}
       {tipo === 'superposicion' && resultado && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {/* Backend devuelve: { total, aportaciones, procedimiento } */}
           <ResultRow
             label={`${parametro === 'voltaje' ? 'V' : 'I'} total en ${compId}`}
-            value={`${Number(resultado.total ?? 0).toFixed(4)} ${parametro === 'voltaje' ? 'V' : 'A'}`}
+            value={fmtAuto(resultado.total ?? 0, parametro === 'voltaje' ? 'V' : 'A')}
             color="#fbbf24"
           />
           {resultado.aportaciones?.map((ap) => (
             <ResultRow
               key={ap.fuenteId}
               label={`Aporte de ${ap.fuenteId}`}
-              value={`${Number(ap.valorAporte ?? 0).toFixed(4)} ${parametro === 'voltaje' ? 'V' : 'A'}`}
+              value={fmtAuto(ap.valorAporte ?? 0, parametro === 'voltaje' ? 'V' : 'A')}
               color="#4ade80"
             />
           ))}
@@ -217,7 +224,7 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
         </div>
       )}
 
-      {/* Placeholder vacío */}
+      {/* Placeholder vacio */}
       {!resultado && !loading && !error && (
         <p style={{ color: '#555', fontSize: 12, margin: 0 }}>
           Ingresa el ID del componente y presiona Calcular.

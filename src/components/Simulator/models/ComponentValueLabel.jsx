@@ -46,6 +46,9 @@ export function parseNotation(str) {
 export function formatValue(value, unit = '') {
   if (value === null || value === undefined || isNaN(value)) return `—${unit}`;
 
+  // Caso especial: exactamente cero → no tiene sentido un prefijo
+  if (value === 0) return `0${unit}`;
+
   const abs = Math.abs(value);
   const tiers = [
     { threshold: 1e9,  divisor: 1e9,  prefix: 'G' },
@@ -55,16 +58,17 @@ export function formatValue(value, unit = '') {
     { threshold: 1e-3, divisor: 1e-3, prefix: 'm' },
     { threshold: 1e-6, divisor: 1e-6, prefix: 'µ' },
     { threshold: 1e-9, divisor: 1e-9, prefix: 'n' },
-    { threshold: 0,    divisor: 1e-12,prefix: 'p' },
+    { threshold: 1e-12,divisor: 1e-12,prefix: 'p' },
   ];
 
   for (const tier of tiers) {
     if (abs >= tier.threshold) {
-      const scaled = value / tier.divisor;
+      const scaled    = value / tier.divisor;
       const formatted = parseFloat(scaled.toPrecision(3));
       return `${formatted}${tier.prefix}${unit}`;
     }
   }
+  // Valores menores que 1 pF/pA/etc. -> mostrar en pico igualmente
   const scaled = value / 1e-12;
   return `${parseFloat(scaled.toPrecision(3))}p${unit}`;
 }

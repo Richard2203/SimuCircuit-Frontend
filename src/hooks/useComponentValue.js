@@ -3,15 +3,15 @@
  *
  * Gestiona el valor numerico local de un componente del canvas SVG.
  * Se suscribe a COMPONENT_VALUE_CHANGED en el EventBus para que cambios
- * externos (ej. sidebar, otro panel) se reflejen aquí (Observer).
+ * externos se reflejen aqui (Observer).
  *
  * Al confirmar un nuevo valor, ademas de publicar COMPONENT_VALUE_CHANGED,
  * despacha SET_NETLIST al Mediator para mantener la netlist del estado
  * global sincronizada con lo que el usuario ve en el canvas.
  *
- * @param {string} componentId  - ID unico del componente (ej. "R1")
+ * @param {string} componentId  - ID unico del componente
  * @param {number} initialValue - Valor inicial en unidades SI
- * @returns {[number, (v: number) => void]}
+ * @returns {[number, (v: number, paramsOverride?: object) => void]}
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -33,19 +33,30 @@ export function useComponentValue(componentId, initialValue) {
 
   /**
    * Actualiza el valor local y sincroniza la netlist en el Mediator.
-   * Llamado tras confirmar la edición inline en el canvas.
+   *
+   * @param {number} newVal           - Nuevo valor en unidades SI.
+   * @param {object} [paramsOverride] - Campos adicionales de "params" a actualizar
+   *                                    junto con el valor, util para componentes 
+   *                                    cuyo comportamiento en el backend depende de 
+   *                                    params ademas de value
    */
-  const setValue = useCallback((newVal) => {
+  const setValue = useCallback((newVal, paramsOverride = null) => {
     setValueInternal(newVal);
 
-    // Actualizar la netlist del estado global en el Mediator
     const { netlist } = mediator.getState();
     if (Array.isArray(netlist) && netlist.length > 0) {
-      const netlistActualizada = netlist.map((comp) =>
-        comp.id === componentId
-          ? { ...comp, value: String(newVal) }
-          : comp
-      );
+      const netlistActualizada = netlist.map((comp) => {
+        if (comp.id !== componentId) return comp;
+
+        const updated = { ...comp, value: String(newVal) };
+
+        // Aplicar overrides de params si se proporcionaron
+        if (paramsOverride && typeof paramsOverride === 'object') {
+          updated.params = { ...(comp.params ?? {}), ...paramsOverride };
+        }
+
+        return updated;
+      });
       mediator.dispatch('SET_NETLIST', netlistActualizada);
     }
   }, [componentId]);

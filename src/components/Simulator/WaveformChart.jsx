@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
+import { formatValue } from './models/ComponentValueLabel.jsx';
 import {
   Chart,
   CategoryScale,
@@ -59,11 +60,14 @@ const BASE_OPTIONS = {
   scales: BASE_SCALES,
 };
 
+/** Frecuencia en Hz con sufijo k/M */
 function formatHz(f) {
-  if (f >= 1e6) return `${(f / 1e6).toFixed(1)}M`;
-  if (f >= 1e3) return `${(f / 1e3).toFixed(0)}k`;
-  return `${Number(f).toFixed(0)}`;
+  return formatValue(Number(f), 'Hz');
 }
+/** Voltaje con sufijo m/µ/n/p/k/M */
+const fmtV = (v) => formatValue(Number(v), 'V');
+/** Corriente con sufijo m/µ/n/p/k/M */
+const fmtA = (v) => formatValue(Number(v), 'A');
 
 function useChart(canvasRef, config, deps) {
   const instanceRef = useRef(null);
@@ -75,7 +79,7 @@ function useChart(canvasRef, config, deps) {
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-// --- DC voltajes ----------------------------------------------------------
+// DC voltajes
 
 function DCVoltageChart({ dcData }) {
   const ref = useRef(null);
@@ -87,7 +91,7 @@ function DCVoltageChart({ dcData }) {
       labels: nodos.map(([k]) => `Nodo ${k}`),
       datasets: nodos.map(([nodo, val], idx) => ({
         label: `V(${nodo})`,
-        data: nodos.map(([n]) => n === nodo ? Number(Number(val).toFixed(4)) : null),
+        data: nodos.map(([n]) => n === nodo ? Number(val) : null),
         borderColor: PALETTE[idx % PALETTE.length],
         backgroundColor: PALETTE[idx % PALETTE.length] + '33',
         borderWidth: 2,
@@ -102,7 +106,7 @@ function DCVoltageChart({ dcData }) {
       plugins: {
         ...BASE_OPTIONS.plugins,
         title: { display: true, text: 'Voltajes nodales (DC)', color: '#94a3b8', font: { size: 12, family: 'monospace' } },
-        tooltip: { ...BASE_OPTIONS.plugins.tooltip, callbacks: { label: (i) => ` ${i.dataset.label}: ${i.parsed.y} V` } },
+        tooltip: { ...BASE_OPTIONS.plugins.tooltip, callbacks: { label: (i) => ` ${i.dataset.label}: ${fmtV(i.parsed.y)}` } },
       },
       scales: { ...BASE_SCALES, y: { ...BASE_SCALES.y, title: { display: true, text: 'Voltaje (V)', color: '#5a6278', font: { size: 10 } } } },
     },
@@ -112,7 +116,7 @@ function DCVoltageChart({ dcData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 200 }} />;
 }
 
-// --- DC corrientes ----------------------------------------------------------
+// DC corrientes
 
 function DCCurrentChart({ dcData }) {
   const ref = useRef(null);
@@ -124,7 +128,7 @@ function DCCurrentChart({ dcData }) {
       labels: ramas.map(([k]) => `I(${k})`),
       datasets: ramas.map(([comp, val], idx) => ({
         label: `I(${comp})`,
-        data: ramas.map(([c]) => c === comp ? Number(Number(val).toFixed(6)) : null),
+        data: ramas.map(([c]) => c === comp ? Number(val) : null),
         borderColor: PALETTE[(idx + 2) % PALETTE.length],
         backgroundColor: PALETTE[(idx + 2) % PALETTE.length] + '33',
         borderWidth: 2,
@@ -139,7 +143,7 @@ function DCCurrentChart({ dcData }) {
       plugins: {
         ...BASE_OPTIONS.plugins,
         title: { display: true, text: 'Corrientes de rama (DC)', color: '#94a3b8', font: { size: 12, family: 'monospace' } },
-        tooltip: { ...BASE_OPTIONS.plugins.tooltip, callbacks: { label: (i) => ` ${i.dataset.label}: ${i.parsed.y} A` } },
+        tooltip: { ...BASE_OPTIONS.plugins.tooltip, callbacks: { label: (i) => ` ${i.dataset.label}: ${fmtA(i.parsed.y)}` } },
       },
       scales: { ...BASE_SCALES, y: { ...BASE_SCALES.y, title: { display: true, text: 'Corriente (A)', color: '#5a6278', font: { size: 10 } } } },
     },
@@ -149,7 +153,7 @@ function DCCurrentChart({ dcData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 180 }} />;
 }
 
-// --- AC magnitud ----------------------------------------------------------
+// AC magnitud
 
 function ACMagnitudChart({ acData }) {
   const ref = useRef(null);
@@ -162,7 +166,7 @@ function ACMagnitudChart({ acData }) {
       labels,
       datasets: nodos.map((nodo, idx) => ({
         label: `|V(${nodo})|`,
-        data: acData.map(p => Number((p.voltages?.[nodo]?.magnitud ?? 0).toFixed(6))),
+        data: acData.map(p => p.voltages?.[nodo]?.magnitud ?? 0),
         borderColor: PALETTE[idx % PALETTE.length],
         backgroundColor: idx === 0 ? PALETTE[0] + '22' : 'transparent',
         borderWidth: 2,
@@ -180,8 +184,8 @@ function ACMagnitudChart({ acData }) {
         tooltip: {
           ...BASE_OPTIONS.plugins.tooltip,
           callbacks: {
-            title: (items) => `f = ${acData[items[0].dataIndex]?.frecuencia} Hz`,
-            label: (i) => ` ${i.dataset.label}: ${i.parsed.y} V`,
+            title: (items) => `f = ${formatHz(acData[items[0].dataIndex]?.frecuencia)}`,
+            label: (i) => ` ${i.dataset.label}: ${fmtV(i.parsed.y)}`,
           },
         },
       },
@@ -195,7 +199,7 @@ function ACMagnitudChart({ acData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 220 }} />;
 }
 
-// --- AC fase ----------------------------------------------------------
+// AC fase
 
 function ACFaseChart({ acData }) {
   const ref = useRef(null);
@@ -208,7 +212,7 @@ function ACFaseChart({ acData }) {
       labels,
       datasets: nodos.map((nodo, idx) => ({
         label: `∠V(${nodo})`,
-        data: acData.map(p => Number((p.voltages?.[nodo]?.fase ?? 0).toFixed(2))),
+        data: acData.map(p => p.voltages?.[nodo]?.fase ?? 0),
         borderColor: PALETTE[idx % PALETTE.length],
         backgroundColor: 'transparent',
         borderWidth: 2,
@@ -227,7 +231,7 @@ function ACFaseChart({ acData }) {
         tooltip: {
           ...BASE_OPTIONS.plugins.tooltip,
           callbacks: {
-            title: (items) => `f = ${acData[items[0].dataIndex]?.frecuencia} Hz`,
+            title: (items) => `f = ${formatHz(acData[items[0].dataIndex]?.frecuencia)}`,
             label: (i) => ` ${i.dataset.label}: ${i.parsed.y}°`,
           },
         },
@@ -242,7 +246,7 @@ function ACFaseChart({ acData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 180 }} />;
 }
 
-// --- SubTabPill ----------------------------------------------------------
+// SubTabPill
 
 function SubTabPill({ active, onClick, children }) {
   return (
@@ -259,16 +263,16 @@ function SubTabPill({ active, onClick, children }) {
   );
 }
 
-// --- WaveformChart ----------------------------------------------------------
+// WaveformChart
 
 /**
  * WaveformChart — Grafica de formas de onda.
  *
  * Modos (en orden de prioridad):
- *  1. acData  → Bode magnitud + fase (lineas, Chart.js).
+ *  1. acData  -> Bode magnitud + fase (lineas, Chart.js).
  *               acData debe llegar ya transformado por SimulacionService: 
  *               Array de { frecuencia, voltages: { nodo: { magnitud, fase } } }
- *  2. dcData  → Voltajes nodales + corrientes de rama (lineas de puntos, Chart.js)
+ *  2. dcData  -> Voltajes nodales + corrientes de rama (lineas de puntos, Chart.js)
  *  3. Animacion sintetica con Canvas API
  *
  * @param {{ circuit, isActive, acData, dcData }} props
@@ -280,7 +284,7 @@ export function WaveformChart({ circuit, isActive, acData, dcData }) {
   const hasDC = dcData && Object.keys(dcData.voltages ?? {}).filter(k => k !== '0').length > 0;
 
   const hint = hasAC
-    ? `AC — ${acData.length} puntos · ${acData[0]?.frecuencia}Hz → ${acData[acData.length-1]?.frecuencia}Hz`
+    ? `AC — ${acData.length} puntos · ${formatHz(acData[0]?.frecuencia)} → ${formatHz(acData[acData.length-1]?.frecuencia)}`
     : hasDC
       ? 'DC — voltajes nodales y corrientes de rama'
       : 'Ejecuta Simular DC o ∿ Simular AC para ver las gráficas.';
