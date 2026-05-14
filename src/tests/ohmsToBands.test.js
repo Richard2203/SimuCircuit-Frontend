@@ -1,7 +1,7 @@
 /**
  * PRUEBAS UNITARIAS — ohmsToBands (codigo de color de resistencias)
  
- * ¿Qué se prueba?
+ * ¿Que se prueba?
  *   - Que la funcion convierte valores en Ohms a las 4 bandas correctas
  *   - Valores estandar de la serie E12/E24 mas usados en clase
  *   - Casos borde: 0, negativos, valores extremos del rango permitido
@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-// ── Copia de la logica a testear ─────────────────────────────────────────────
+// Copia de la logica a testear
 const BAND_NAMES = [
   'black', 'brown', 'red', 'orange', 'yellow',
   'green', 'blue', 'violet', 'grey', 'white',

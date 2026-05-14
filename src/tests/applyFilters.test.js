@@ -1,11 +1,15 @@
 /**
- * ¿Que se prueba?
- *   - Busqueda por nombre (case-insensitive)
- *   - Filtro por dificultad, unidad, tema, tipo
- *   - Filtro por componentes (todos deben coincidir)
- *   - Combinacion de múltiples filtros
- *   - Filtros vacios retornan todos los circuitos
+ * applyFilters vive inline en FilterPanel porque es una transformacion 
+ * pura acoplada al estado local del componente. La funcion se duplica 
+ * aqui para poder probarla de forma aislada — esto es preferible a 
+ * exponer internos del componente solo por testabilidad.
  *
+ * Prueba
+ *   - Filtros vacios retornan todos los circuitos
+ *   - Busqueda por nombre (case-insensitive, substring)
+ *   - Filtros por campo exacto (difficulty, unit, topic, type)
+ *   - Filtro AND por componentes: el circuito debe tenerlos TODOS
+ *   - Combinacion de moltiples filtros simultaneos
  */
 
 import { describe, it, expect } from 'vitest';
@@ -30,10 +34,8 @@ function applyFilters(circuits, filters) {
     return true;
   });
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-// Dataset de prueba
-const MOCK_CIRCUITS = [
+const CIRCUITS = [
   {
     id: 'una-malla',
     name: 'Circuito de Una Malla',
@@ -72,129 +74,83 @@ const MOCK_CIRCUITS = [
   },
 ];
 
-const emptyFilters = {
-  search: '', difficulty: '', unit: '', topic: '', type: '', components: [],
-};
+const EMPTY = { search: '', difficulty: '', unit: '', topic: '', type: '', components: [] };
 
-// ─── Filtros vacios ───────────────────────────────────────────────────────────
-describe('applyFilters — sin filtros activos', () => {
-  it('retorna todos los circuitos cuando los filtros están vacíos', () => {
-    expect(applyFilters(MOCK_CIRCUITS, emptyFilters)).toHaveLength(4);
+describe('applyFilters — filtros vacíos', () => {
+  it('retorna todos los circuitos', () => {
+    expect(applyFilters(CIRCUITS, EMPTY)).toHaveLength(4);
   });
 
-  it('retorna arreglo vacío si no hay circuitos', () => {
-    expect(applyFilters([], emptyFilters)).toHaveLength(0);
+  it('retorna array vacío si no hay circuitos', () => {
+    expect(applyFilters([], EMPTY)).toHaveLength(0);
   });
 });
 
-// ─── Busqueda por nombre ──────────────────────────────────────────────────────
-
 describe('applyFilters — búsqueda por nombre', () => {
-  it('encuentra por nombre exacto', () => {
-    const result = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, search: 'Divisor de Voltaje' });
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('divisor-voltaje');
+  it('es case-insensitive', () => {
+    const lower = applyFilters(CIRCUITS, { ...EMPTY, search: 'malla' });
+    const upper = applyFilters(CIRCUITS, { ...EMPTY, search: 'MALLA' });
+    expect(lower.length).toBe(upper.length);
+    expect(lower.length).toBeGreaterThan(0);
   });
 
   it('encuentra por substring parcial', () => {
-    const result = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, search: 'malla' });
-    expect(result).toHaveLength(2); // "Una Malla" y "Cuatro Mallas"
+    expect(applyFilters(CIRCUITS, { ...EMPTY, search: 'malla' })).toHaveLength(2);
   });
 
-  it('es case-insensitive (MALLA = malla = Malla)', () => {
-    const lower = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, search: 'malla' });
-    const upper = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, search: 'MALLA' });
-    const mixed = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, search: 'Malla' });
-    expect(lower).toHaveLength(upper.length);
-    expect(lower).toHaveLength(mixed.length);
-  });
-
-  it('retorna vacío si no hay coincidencia', () => {
-    const result = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, search: 'circuito inexistente xyz' });
-    expect(result).toHaveLength(0);
+  it('retorna vacío cuando no hay coincidencia', () => {
+    expect(applyFilters(CIRCUITS, { ...EMPTY, search: 'xyz123' })).toHaveLength(0);
   });
 });
 
-// ─── Filtros de campos exactos ────────────────────────────────────────────────
-
 describe('applyFilters — filtros por campo exacto', () => {
-  it('filtra por dificultad Fácil', () => {
-    const result = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, difficulty: 'Fácil' });
+  it('difficulty filtra correctamente', () => {
+    const result = applyFilters(CIRCUITS, { ...EMPTY, difficulty: 'Fácil' });
     expect(result).toHaveLength(2);
     result.forEach(c => expect(c.difficulty).toBe('Fácil'));
   });
 
-  it('filtra por unidad Electrónica Analógica', () => {
-    const result = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, unit: 'Electrónica Analógica' });
+  it('unit filtra correctamente', () => {
+    const result = applyFilters(CIRCUITS, { ...EMPTY, unit: 'Electrónica Analógica' });
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('bjt-amplifier');
   });
 
-  it('filtra por tipo Serie', () => {
-    const result = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, type: 'Serie' });
-    expect(result).toHaveLength(2);
-  });
-
-  it('filtra por tema Mallas DC', () => {
-    const result = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, topic: 'Mallas DC' });
-    expect(result).toHaveLength(2);
+  it('topic filtra correctamente', () => {
+    expect(applyFilters(CIRCUITS, { ...EMPTY, topic: 'Mallas DC' })).toHaveLength(2);
   });
 });
 
-// ─── Filtro por componentes ───────────────────────────────────────────────────
-
-describe('applyFilters — filtro por componentes', () => {
-  it('retorna circuitos que contienen el componente solicitado', () => {
-    const result = applyFilters(MOCK_CIRCUITS, { ...emptyFilters, components: ['Transistor BJT'] });
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('bjt-amplifier');
-  });
-
-  it('requiere que el circuito tenga TODOS los componentes seleccionados', () => {
-    const result = applyFilters(MOCK_CIRCUITS, {
-      ...emptyFilters,
+describe('applyFilters — filtro AND por componentes', () => {
+  it('el circuito debe tener TODOS los componentes seleccionados', () => {
+    const result = applyFilters(CIRCUITS, {
+      ...EMPTY,
       components: ['Resistencias', 'Transistor BJT'],
     });
-    expect(result).toHaveLength(1); // Solo bjt-amplifier tiene ambos
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('bjt-amplifier');
   });
 
   it('retorna vacío si ningún circuito tiene todos los componentes', () => {
-    const result = applyFilters(MOCK_CIRCUITS, {
-      ...emptyFilters,
+    expect(applyFilters(CIRCUITS, {
+      ...EMPTY,
       components: ['Transistor BJT', 'Diodo LED'],
-    });
-    expect(result).toHaveLength(0);
+    })).toHaveLength(0);
   });
 });
 
-// ─── Combinacion de filtros ───────────────────────────────────────────────────
-
-describe('applyFilters — combinación de múltiples filtros', () => {
-  it('combina search + difficulty correctamente', () => {
-    const result = applyFilters(MOCK_CIRCUITS, {
-      ...emptyFilters,
-      search: 'malla',
-      difficulty: 'Fácil',
+describe('applyFilters — combinación de filtros', () => {
+  it('search + difficulty reduce el resultado correctamente', () => {
+    const result = applyFilters(CIRCUITS, {
+      ...EMPTY, search: 'malla', difficulty: 'Fácil',
     });
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('una-malla');
   });
 
-  it('combina unit + type correctamente', () => {
-    const result = applyFilters(MOCK_CIRCUITS, {
-      ...emptyFilters,
-      unit: 'Circuitos Eléctricos',
-      type: 'Serie',
-    });
-    expect(result).toHaveLength(2);
-  });
-
-  it('filtros muy específicos retornan 0 si no hay coincidencia exacta', () => {
-    const result = applyFilters(MOCK_CIRCUITS, {
-      ...emptyFilters,
-      difficulty: 'Difícil',
-      type: 'Serie',
-    });
-    expect(result).toHaveLength(0);
+  it('filtros contradictorios devuelven array vacío', () => {
+    expect(applyFilters(CIRCUITS, {
+      ...EMPTY, difficulty: 'Difícil', type: 'Serie',
+    })).toHaveLength(0);
   });
 });

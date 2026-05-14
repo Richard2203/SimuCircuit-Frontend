@@ -12,7 +12,8 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "coverage": "vitest run --coverage",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "docs:tests": "node generate-test-docs.js"
   },
   "dependencies": {
     "@cloudinary/react": "^1.14.4",
@@ -33,6 +34,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "docx": "^9.6.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

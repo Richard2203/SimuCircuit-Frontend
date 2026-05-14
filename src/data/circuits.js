@@ -1,7 +1,3 @@
-/**
- * circuits.js — Dataset local de circuitos
- */
-
 import { Circuit } from '../domain';
 
 export const DIFFICULTIES = ['Fácil', 'Intermedio', 'Difícil'];
