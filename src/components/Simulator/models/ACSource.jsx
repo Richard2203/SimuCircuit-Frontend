@@ -1,9 +1,8 @@
 // ACSource.jsx — Fuente de voltaje de corriente alterna senoidal.
-// Símbolo electrico estandar: círculo con una onda senoidal en su interior.
 //
 // Convencion de pines (en local-space, antes de aplicar rotation):
-//   pin 'pos' a la DERECHA del circulo (terminal +)
-//   pin 'neg' a la IZQUIERDA del círculo (terminal −, identificado
+//   pin "pos" a la DERECHA del circulo (terminal +)
+//   pin "neg" a la IZQUIERDA del circulo (terminal −, identificado
 //   con un cable rojo corto saliendo desde el cuerpo).
 //
 import { useState } from 'react';
@@ -12,8 +11,8 @@ import { ComponentValueLabel } from './ComponentValueLabel.jsx';
 import { useComponentValue } from '../../../hooks/useComponentValue.js';
 
 export const ACSource = ({
-  nodePos = 'pos',
-  nodeNeg = 'neg',
+  nodePos = "pos",
+  nodeNeg = "neg",
   x = 0,
   y = 0,
   scale = COMPONENT_SCALE.powerSource,
@@ -23,16 +22,23 @@ export const ACSource = ({
   frequency   = 60,            // 60 Hz default
   onValueChange,
 }) => {
+  const clampAmplitude = (val) => {
+    const num = parseFloat(val);
+    if (isNaN(num)) return 5;
+    return Math.min(120, Math.max(1, num));
+  };
+  const safeInitial = clampAmplitude(initialValue);
+
   const id = componentId || `acsource-${x}-${y}`;
-  const [value, setValue] = useComponentValue(id, initialValue);
+  const [value, setValue] = useComponentValue(id, safeInitial);
   const [hovered, setHovered] = useState(false);
 
   // Geometria base (en local-space, antes de scale)
-  const R       = 60;        // radio del círculo
+  const R       = 60;        // radio del circulo
   const armLen  = 78;        // longitud del cable que sale a cada lado
   const pinDist = R + armLen;  // distancia x desde el centro hasta cada pin
 
-  // Pines en world-space (rotPt aplica rotación + escala)
+  // Pines en world-space (rotPt aplica rotacion + escala)
   const rotPt = (dx, dy) => {
     const r = (rotation * Math.PI) / 180;
     const c = Math.cos(r), s = Math.sin(r);
@@ -43,7 +49,11 @@ export const ACSource = ({
 
   const handleValueChange = (v) => { setValue(v); onValueChange?.(v); };
 
-  // Onda senoidal dentro del circulo: 1.5 ciclos de seno, escalado al ~70% del radio
+  const handleFrequencyChange = (newFreq) => {
+    setValue(value, { frequency: String(newFreq) });
+  };
+
+  // Onda senoidal dentro del circulo: 1.5 ciclos de seno, escalado al 70% del radio
   // Usa 24 puntos para que sea suave.
   const wavePts = [];
   const waveW = R * 1.4;
@@ -99,13 +109,13 @@ export const ACSource = ({
         {/* Cables a izquierda y derecha (gris metalico) */}
         <rect x={-pinDist} y={-3} width={armLen + 6} height={6} rx={2}
           fill={`url(#${id}-pin)`}/>
-        {/* Cable rojo del lado positivo (derecha) — convención visual */}
+        {/* Cable rojo del lado positivo (derecha) — convencion visual */}
         <rect x={R - 2} y={-2.5} width={armLen * 0.45} height={5} rx={1.5}
           fill="#d32d2d" opacity="0.9"/>
         <rect x={R - 2 + armLen * 0.45} y={-3} width={armLen * 0.55 + 8}
           height={6} rx={2} fill={`url(#${id}-pin)`}/>
 
-        {/* Cuerpo del círculo */}
+        {/* Cuerpo del circulo */}
         <circle cx="0" cy="0" r={R}
           fill={`url(#${id}-body)`}
           stroke="#0a0e14" strokeWidth="2"/>
@@ -134,7 +144,7 @@ export const ACSource = ({
         {/* Etiqueta del valor (Voltios) — abajo */}
         <ComponentValueLabel
           componentId={id}
-          type="voltageSource"
+          type="voltageSourceAC"
           value={value}
           onChange={handleValueChange}
           x={0}
@@ -145,14 +155,19 @@ export const ACSource = ({
           rotate={-rotation}
         />
 
-        {/* Etiqueta de frecuencia, debajo del valor */}
-        <text x="0" y={R + 44}
-          textAnchor="middle" fontSize={12 / scale} fill="#7c8d9e"
-          fontFamily="monospace"
-          transform={`rotate(${-rotation} 0 ${R + 44})`}
-          style={{ pointerEvents: 'none' }}>
-          {frequency}Hz
-        </text>
+        {/* Etiqueta de frecuencia (Hz) — editable, debajo del valor */}
+        <ComponentValueLabel
+          componentId={`${id}-freq`}
+          type="frequency"
+          value={frequency}
+          onChange={handleFrequencyChange}
+          x={0}
+          y={R + 44}
+          textAnchor="middle"
+          fontSize={12 / scale}
+          fill="#7c8d9e"
+          rotate={-rotation}
+        />
       </g>
 
       {/* Hitboxes para conectores en world-space */}

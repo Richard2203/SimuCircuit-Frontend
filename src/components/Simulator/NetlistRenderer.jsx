@@ -43,7 +43,7 @@ function findLowestGndPin(netlist) {
  *   energized: boolean,  — true cuando la simulación está activa
  * }} props
  */
-export function NetlistRenderer({ netlist, preview = false, energized = false }) {
+export function NetlistRenderer({ netlist, preview = false, energized = false, dcResults = null }) {
   if (!netlist?.length) {
     return (
       <svg width="100%" height={preview ? 120 : 300}
@@ -80,7 +80,7 @@ export function NetlistRenderer({ netlist, preview = false, energized = false })
       {gndAnchor && <GndSymbol x={gndAnchor.x} y={gndAnchor.y + 18} />}
 
       {/* Capa 3: cuerpos de componentes */}
-      {netlist.map((comp) => renderComponent(comp, energized))}
+      {netlist.map((comp) => renderComponent(comp, energized, dcResults))}
 
       {/* Capas 4 y 5: etiquetas */}
       {!preview && <CompLabels netlist={netlist} />}

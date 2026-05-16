@@ -8,7 +8,7 @@ import { Circuit }            from '../domain';
 
 /**
  * SimuCircuitMediator — Pattern: Mediator
- * Hub central que coordina toda la comunicación entre componentes.
+ * Hub central que coordina toda la comunicacion entre componentes.
  *
  * Eventos publicados al bus:
  *   - STATE_CHANGED        -> cuando el estado global cambia
@@ -30,6 +30,8 @@ const INITIAL_STATE = {
   simTime: 0,
   simResultadoDC: null,
   simResultadoAC: null,
+  procedimientoDC: null, 
+  procedimientoAC: null, 
   simError: null,
   filtrosApi: null,
   /** @type {Circuit[]} */
@@ -105,6 +107,8 @@ class SimuCircuitMediator {
           simTime: 0,
           simResultadoDC: null,
           simResultadoAC: null,
+          procedimientoDC: null,
+          procedimientoAC: null,
           simError: null,
           teoremaResultado: null,
           openAccordions: {},
@@ -123,6 +127,8 @@ class SimuCircuitMediator {
           simTime: 0,
           simResultadoDC: null,
           simResultadoAC: null,
+          procedimientoDC: null,
+          procedimientoAC: null,
           simError: null,
           teoremaResultado: null,
         };
@@ -150,6 +156,8 @@ class SimuCircuitMediator {
           simTime: 0,
           simResultadoDC: null,
           simResultadoAC: null,
+          procedimientoDC: null,
+          procedimientoAC: null,
           simError: null,
         };
         break;
@@ -244,6 +252,8 @@ class SimuCircuitMediator {
         simTime:         0,
         simResultadoDC:  null,
         simResultadoAC:  null,
+        procedimientoDC: null,
+        procedimientoAC: null,
         simError:        null,
         teoremaResultado: null,
         openAccordions:  {},
@@ -285,14 +295,16 @@ class SimuCircuitMediator {
   async simularDC(opciones = {}) {
     const netlistJSON = this._netlistParaBackend(opciones.netlist ?? this._state.netlist);
     const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
+    const id = this._state.selectedCircuit?.id ?? opciones.id;
 
     this._bus.publish('simulacion:iniciada', { tipo: 'DC', netlist: netlistJSON });
     this._setLoading('simulacionDC', true);
     this._state.simError = null;
 
     try {
-      const resultado = await SimulacionService.simularDC({ netlist: netlistJSON, nombre_circuito });
+      const { resultado, procedimiento } = await SimulacionService.simularDC({ netlist: netlistJSON, nombre_circuito, id });
       this._state.simResultadoDC = resultado;
+      this._state.procedimientoDC = procedimiento;  // null si el circuito no tiene plantilla
       this._bus.publish('simulacion:completada', { tipo: 'DC', resultado });
     } catch (err) {
       this._state.simError = err.message;
@@ -310,18 +322,21 @@ class SimuCircuitMediator {
   async simularAC(opciones = {}) {
     const netlistJSON = this._netlistParaBackend(opciones.netlist ?? this._state.netlist);
     const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
+    const id = this._state.selectedCircuit?.id ?? opciones.id;
 
     this._bus.publish('simulacion:iniciada', { tipo: 'AC', netlist: netlistJSON });
     this._setLoading('simulacionAC', true);
     this._state.simError = null;
 
     try {
-      const resultado = await SimulacionService.simularAC({
+      const { resultado, procedimiento } = await SimulacionService.simularAC({
         netlist: netlistJSON,
         configuracion_ac: opciones.configuracion_ac,
         nombre_circuito,
+        id,
       });
       this._state.simResultadoAC = resultado;
+      this._state.procedimientoAC = procedimiento;  // null si el circuito no tiene plantilla
       this._bus.publish('simulacion:completada', { tipo: 'AC', resultado });
     } catch (err) {
       this._state.simError = err.message;
@@ -415,9 +430,10 @@ class SimuCircuitMediator {
     this._setLoading('analisisNodal', true);
     this._state.analisisError = null;
     try {
-      const resultado = await SimulacionService.simularDC({
+      const { resultado } = await SimulacionService.simularDC({
         netlist: netlistJSON,
         nombre_circuito: this._nombreCircuitoActual(),
+        id: this._state.selectedCircuit?.id,
       });
       this._state.analisisResultado = { tipo: 'nodal', ...resultado };
     } catch (err) {
@@ -529,7 +545,7 @@ class SimuCircuitMediator {
     this._bus.publish('STATE_CHANGED', this.getState());
   }
 
-  // ─── Helpers privados ────────────────────────────────────────
+  // Helpers privados 
 
   /**
    * Convierte la netlist de instancias Component al formato plano que espera el backend.
@@ -544,7 +560,7 @@ class SimuCircuitMediator {
       // Si ya es un objeto plano (no instancia), convertir nodes si es necesario
       const raw = typeof c?.toBackendJSON === 'function' ? c.toBackendJSON() : { ...c };
 
-      // Normalizar nodes: { pin: { nodo, x, y } } → { pin: "nodoString" }
+      // Normalizar nodes: { pin: { nodo, x, y } } -> { pin: "nodoString" }
       const nodes = {};
       Object.entries(raw.nodes ?? {}).forEach(([pin, val]) => {
         nodes[pin] = typeof val === 'object' ? String(val.nodo ?? '') : String(val);
@@ -555,7 +571,14 @@ class SimuCircuitMediator {
         type:     raw.type,
         value:    raw.value,
         nodes,
-        params:   raw.params   ?? {},
+        
+        ...(() => {
+          const p = { ...(raw.params ?? {}) };
+          if (raw.type === 'potenciometro' && typeof p.wiper !== 'number') {
+            p.wiper = typeof p.cursor_pos === 'number' ? p.cursor_pos / 100 : 0.5;
+          }
+          return { params: p };
+        })(),
         position: raw.position ?? { x: 0, y: 0 },
         rotation: raw.rotation ?? 0,
       };

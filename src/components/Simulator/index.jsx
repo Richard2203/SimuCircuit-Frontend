@@ -38,6 +38,8 @@ export function Simulator({ state, dispatch, api }) {
     teoremaResultado,
     analisisResultado,
     analisisError,
+    procedimientoDC,
+    procedimientoAC,
   } = state;
 
   const svgContainerRef = useRef(null);
@@ -110,7 +112,7 @@ export function Simulator({ state, dispatch, api }) {
             <div className="circuit-svg-wrap" ref={svgContainerRef}>
               <button className="export-btn" onClick={exportToPNG}>↓ Exportar PNG</button>
               <CircuitEditProvider locked={isActive}>
-                <CircuitSVG circuit={c} energized={isActive} />
+                <CircuitSVG circuit={c} energized={isActive} dcResults={simResultadoDC} />
               </CircuitEditProvider>
             </div>
 
@@ -268,6 +270,8 @@ export function Simulator({ state, dispatch, api }) {
                 analisisResultado={analisisResultado}
                 teoremaResultado={teoremaResultado}
                 simResultadoDC={simResultadoDC}
+                procedimientoDC={procedimientoDC}
+                procedimientoAC={procedimientoAC}
                 loading={loading}
                 simError={simError}
                 analisisError={analisisError}
@@ -298,7 +302,7 @@ export function Simulator({ state, dispatch, api }) {
 function AccordionsCondicionales({
   c, state, dispatch, api,
   netlist, analisisResultado, teoremaResultado,
-  simResultadoDC, loading, simError, analisisError,
+  simResultadoDC, procedimientoDC, procedimientoAC, loading, simError, analisisError,
 }) {
   const cc = c.componentCounts; // { R, C, L, F, D, Q, J, U }
 
@@ -317,7 +321,10 @@ function AccordionsCondicionales({
   // Flags de visibilidad por accordion
   const mostrarNodal       = c.tieneDC;
   const mostrarTransitorio = c.tieneDC && (cc.C > 0 || cc.L > 0);
-  const mostrarGeneral     = cc.R > 0;
+  // Req es un escalar real: solo aplica si no hay reactivos, o hay regimen DC
+  // en estado estable (C abierto, L corto). En AC puro con C o L lo correcto es Zeq(w),
+  // no R_eq.
+  const mostrarGeneral     = cc.R > 0 && (c.tieneDC || (cc.C === 0 && cc.L === 0));
   const mostrarLeyes       = true; // KVL/KCL siempre; divisores condicionados internamente
   const mostrarThevenin    = c.tieneDC && cc.R >= 2 && !tieneNoLineales;
   const mostrarSuper       = c.tieneDC && numFuentesDC >= 2;
@@ -407,6 +414,14 @@ function AccordionsCondicionales({
         />
       )}
 
+      {procedimientoDC && A('procedimiento-dc', 'Procedimiento de Cálculo DC', '📐',
+        <ProcedimientoPanel procedimiento={procedimientoDC} />
+      )}
+
+      {procedimientoAC && A('procedimiento-ac', 'Procedimiento de Cálculo AC', '〰️',
+        <ProcedimientoPanel procedimiento={procedimientoAC} />
+      )}
+
       {/* Mensaje cuando ningun accordion aplica (circuito AC puro, solo diodos, etc.) */}
       {!mostrarNodal && !mostrarTransitorio && !mostrarThevenin && !mostrarSuper && (
         <p style={{ fontSize: 12, color: '#3a3f4e', padding: '12px 4px' }}>
@@ -466,8 +481,6 @@ function PasoFormula({ paso }) {
     </div>
   );
 }
-
-
 
 const ROW = ({ label, value, color = '#94a3b8', mono = true }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
@@ -791,8 +804,76 @@ function ACSimularBtn({ isActive, isRunning, onSimular }) {
   );
 }
 
-// Transformacion de Fuente
+// Procedimiento de Calculo
+function ProcedimientoPanel({ procedimiento }) {
+  const [pasoAbierto, setPasoAbierto] = useState(null);
 
+  if (!procedimiento) return null;
+
+  const { titulo, pasos = [] } = procedimiento;
+
+  return (
+    <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+      {titulo && (
+        <p style={{ fontSize: 12, color: '#a78bfa', fontWeight: 600, margin: 0 }}>
+          {titulo}
+        </p>
+      )}
+
+      {pasos.map((paso, idx) => {
+        const abierto = pasoAbierto === idx;
+        return (
+          <div key={idx} style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #2a2a3a' }}>
+            {/* Cabecera del paso */}
+            <button
+              onClick={() => setPasoAbierto(abierto ? null : idx)}
+              style={{
+                width: '100%', textAlign: 'left', background: abierto ? '#1e1a2e' : '#16161e',
+                border: 'none', cursor: 'pointer', padding: '8px 12px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 12, color: abierto ? '#c4b5fd' : '#94a3b8', fontWeight: 500 }}>
+                {paso.paso}
+              </span>
+              <span style={{ fontSize: 10, color: '#5a6278' }}>{abierto ? '▲' : '▼'}</span>
+            </button>
+
+            {/* Calculos del paso */}
+            {abierto && (
+              <div style={{ background: '#0f0f16', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(paso.calculos ?? []).map((calc, ci) => (
+                  <div
+                    key={ci}
+                    style={{
+                      padding: '5px 10px', background: '#1a1b22', borderRadius: 5,
+                      borderLeft: '2px solid #6c63ff',
+                    }}
+                  >
+                    <span style={{
+                      fontSize: 12, color: '#e2e8f0',
+                      fontFamily: 'monospace', letterSpacing: '0.02em',
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    }}>
+                      {calc}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {pasos.length === 0 && (
+        <Placeholder text="No hay pasos de cálculo disponibles para este circuito." />
+      )}
+    </div>
+  );
+}
+
+// Transformacion de Fuente
 function TransformacionFuentePanel({ resultado, loading, error, netlist, onCalcular }) {
   const [fuenteId, setFuenteId] = useState('');
 

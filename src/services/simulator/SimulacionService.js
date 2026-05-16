@@ -50,19 +50,25 @@ function transformarAC(raw) {
  * Simula DC.
  * Body: { nombre_circuito, netlist }
  */
-async function simularDC({ netlist, nombre_circuito } = {}) {
+async function simularDC({ netlist, nombre_circuito, id } = {}) {
   validarNetlist(netlist);
-  const res = await apiClient.post('/api/simular/dc', { nombre_circuito, netlist });
-  return res.data;
+  
+  const res = await apiClient.post('/api/simular/dc', { nombre_circuito, netlist, id });
+  console.log('Respuesta DC:', JSON.stringify(res, null, 2 ));
+  return {
+    resultado: res.data ?? res,
+    procedimiento: res.procedimiento ?? null,
+  };
 }
 
 /**
  * Simula AC con barrido de frecuencia.
- * Body: { configuracion_ac: { f_inicial, f_final, puntos, barrido }, nombre_circuito, netlist }
- * barrido: "lineal" | "log" | "decada" | "octava"
- * Devuelve array ya transformado: [{ frecuencia, voltages: { nodo: { magnitud, fase } } }]
+ * 
+ * Devuelve { resultado, procedimiento }:
+ *   resultado    -> array transformado [{ frecuencia, voltages, currents }] que consume WaveformChart
+ *   procedimiento -> pasos del ProcedureManager (mismo shape que DC) o null si el circuito no tiene plantilla
  */
-async function simularAC({ netlist, configuracion_ac, nombre_circuito } = {}) {
+async function simularAC({ netlist, configuracion_ac, nombre_circuito, id } = {}) {
   validarNetlist(netlist);
 
   if (!configuracion_ac) throw new Error('Se requiere configuracion_ac.');
@@ -76,12 +82,19 @@ async function simularAC({ netlist, configuracion_ac, nombre_circuito } = {}) {
     configuracion_ac,
     nombre_circuito,
     netlist,
+    id,
   });
 
-  const data = res.data;
-  if (Array.isArray(data)) return data;           // ya transformado
-  if (data?.frequencySweep) return transformarAC(data); // formato crudo
-  return [];
+  const data = res.data ?? res;
+  let resultado;
+  if (Array.isArray(data))           resultado = data;             
+  else if (data?.frequencySweep)     resultado = transformarAC(data);
+  else                               resultado = [];
+
+  return {
+    resultado,
+    procedimiento: res.procedimiento ?? null,
+  };
 }
 
 export const SimulacionService = { simularDC, simularAC };

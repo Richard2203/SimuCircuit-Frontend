@@ -10,7 +10,7 @@ import { Circuit }        from '../domain';
  * @param {boolean} [props.preview]       - Modo compacto (cards/listados).
  * @param {boolean} [props.energized]     - Animacion de energizacion.
  */
-export function CircuitSVG({ circuit, preview = false, energized = false }) {
+export function CircuitSVG({ circuit, preview = false, energized = false, dcResults = null }) {
   if (!circuit) return null;
 
   const c = circuit instanceof Circuit ? circuit : Circuit.fromAny(circuit);
@@ -43,6 +43,7 @@ export function CircuitSVG({ circuit, preview = false, energized = false }) {
           netlist={netlistJSON}
           preview={preview}
           energized={energized}
+          dcResults={dcResults}
         />
       </div>
     );

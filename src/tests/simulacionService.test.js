@@ -1,7 +1,7 @@
 /**
  * Pruebas del contrato entre SimulacionService y el backend.
  *
- * ¿Por que importa?
+ * Por que importa
  *   SimulacionService es el unico punto donde la respuesta cruda del backend
  *   se transforma al formato que consume WaveformChart. Si transformarAC
  *   calcula magnitud o fase incorrectamente, los graficos Bode mostraran
@@ -68,7 +68,7 @@ describe('SimulacionService.simularAC — transformación de respuesta cruda', (
       phasorCurrents: {},
     });
 
-    const resultado = await SimulacionService.simularAC({
+    const { resultado } = await SimulacionService.simularAC({
       netlist: NETLIST_MINIMA,
       configuracion_ac: CONFIG_AC_VALIDA,
     });
@@ -84,7 +84,7 @@ describe('SimulacionService.simularAC — transformación de respuesta cruda', (
       phasorCurrents: {},
     });
 
-    const resultado = await SimulacionService.simularAC({
+    const { resultado } = await SimulacionService.simularAC({
       netlist: NETLIST_MINIMA,
       configuracion_ac: CONFIG_AC_VALIDA,
     });
@@ -99,7 +99,7 @@ describe('SimulacionService.simularAC — transformación de respuesta cruda', (
       phasorCurrents: {},
     });
 
-    const resultado = await SimulacionService.simularAC({
+    const { resultado } = await SimulacionService.simularAC({
       netlist: NETLIST_MINIMA,
       configuracion_ac: CONFIG_AC_VALIDA,
     });
@@ -118,7 +118,7 @@ describe('SimulacionService.simularAC — transformación de respuesta cruda', (
       phasorCurrents: {},
     });
 
-    const resultado = await SimulacionService.simularAC({
+    const { resultado } = await SimulacionService.simularAC({
       netlist: NETLIST_MINIMA,
       configuracion_ac: CONFIG_AC_VALIDA,
     });
@@ -134,7 +134,7 @@ describe('SimulacionService.simularAC — transformación de respuesta cruda', (
     ];
     mockFetch(yaTransformado);
 
-    const resultado = await SimulacionService.simularAC({
+    const { resultado } = await SimulacionService.simularAC({
       netlist: NETLIST_MINIMA,
       configuracion_ac: CONFIG_AC_VALIDA,
     });

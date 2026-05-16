@@ -15,7 +15,7 @@ import { TransistorTO92 }    from '../models/TransistorTO92.jsx';
 import { Potentiometer }     from '../models/Potentiometer.jsx';
 import { CurrentSource }     from '../models/CurrentSource.jsx';
 import { Bobina }            from '../models/Bobina.jsx';
-import { LED }               from '../models/led.jsx';
+import { LED, LED_COLORS }   from '../models/led.jsx';
 import { parseNotation }     from '../models/ComponentValueLabel.jsx';
 
 import { toSVG } from './geometry.js';
@@ -69,7 +69,7 @@ export function FallbackComp({ comp, x, y }) {
  * @param {boolean} energized  true cuando la simulacion esta activa
  * @returns {JSX.Element}
  */
-export function renderComponent(comp, energized = false) {
+export function renderComponent(comp, energized = false, dcResults = null) {
   const { x, y }   = toSVG(comp.position);
   const rotation   = comp.rotation ?? 0;
   const valueNum   = parseNotation(comp.value) || 0;
@@ -145,18 +145,35 @@ export function renderComponent(comp, energized = false) {
       const esLED = (comp.params?.tipo || '').toLowerCase().startsWith('led');
 
       if (esLED) {
+        let ledOn = energized;
+
+        if (energized && dcResults?.voltages) {
+          const colorKey = (comp.value || 'VERDE').trim().toUpperCase();
+          const colorDef = LED_COLORS.find(c => c.value === colorKey) || LED_COLORS.find(c => c.value === 'VERDE');
+          const vf = colorDef?.vf ?? 2.0;
+
+          // Leer los nodos del LED (anodo = n1, catodo = n2).
+          // comp.nodes[pin] es un objeto { nodo, x, y } — hay que leer .nodo
+          const nAnodo  = String(comp.nodes?.n1?.nodo ?? comp.nodes?.n1 ?? '');
+          const nCatodo = String(comp.nodes?.n2?.nodo ?? comp.nodes?.n2 ?? '');
+          const vAnodo  = dcResults.voltages[nAnodo]  ?? 0;
+          const vCatodo = dcResults.voltages[nCatodo] ?? 0;
+          const vDiodo  = vAnodo - vCatodo;
+          ledOn = vDiodo >= vf;
+        }
         return (
           <g key={comp.id}>
             <LED x={x} y={y} scale={SCALE_DEFAULT} rotation={rotation}
               componentId={comp.id}
               initialColor={comp.value || 'VERDE'}
-              energized={energized} />
+              energized={ledOn} />
           </g>
         );
       }
+      
       return (
         <g key={comp.id} transform={wrapRotation}>
-          <DiodoRectificador x={x} y={y} scale={SCALE_DEFAULT} orientation={orientation}
+          <DiodoRectificador x={x} y={y} scale={SCALE_DEFAULT} orientation="horizontal"
             componentId={comp.id} initialValue={comp.value} />
         </g>
       );

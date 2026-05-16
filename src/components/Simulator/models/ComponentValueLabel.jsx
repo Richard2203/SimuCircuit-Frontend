@@ -46,7 +46,7 @@ export function parseNotation(str) {
 export function formatValue(value, unit = '') {
   if (value === null || value === undefined || isNaN(value)) return `—${unit}`;
 
-  // Caso especial: exactamente cero → no tiene sentido un prefijo
+  // Caso especial: exactamente cero -> no tiene sentido un prefijo
   if (value === 0) return `0${unit}`;
 
   const abs = Math.abs(value);
@@ -76,11 +76,17 @@ export function formatValue(value, unit = '') {
 // Per-component constraints
 
 export const COMPONENT_CONSTRAINTS = {
-  resistor:      { min: 1,       max: 10e6,  unit: 'Ω', label: '1 Ω – 10 MΩ' },
-  capacitor:     { min: 0.5e-12, max: 100e-6, unit: 'F', label: '0.5 pF – 100 µF' },
-  inductor:      { min: 1e-6,   max: 10,    unit: 'H', label: '1 µH – 10 H' },
-  voltageSource: { min: -23,    max: 23,    unit: 'V', label: '-23 V – 23 V' },
-  currentSource: { min: 0,      max: 100,   unit: 'A', label: '0 A – 100 A' },
+  resistor:        { min: 1,       max: 10e6,  unit: 'Ω',  label: '1 Ω – 10 MΩ' },
+  capacitor:       { min: 0.5e-12, max: 100e-6, unit: 'F', label: '0.5 pF – 100 µF' },
+  inductor:        { min: 1e-6,    max: 10,    unit: 'H',  label: '1 µH – 10 H' },
+  voltageSource:   { min: -23,     max: 23,    unit: 'V',  label: '-23 V – 23 V' },
+  // Fuente AC: el usuario teclea la amplitud pico, que debe ser >= 1 V; el signo
+  // se entiende implicito porque la senal oscila entre -V y +V.
+  voltageSourceAC: { min: 1,       max: 120,   unit: 'V',  label: '1 V – 120 V (amplitud pico)' },
+  currentSource:   { min: 0,       max: 100,   unit: 'A',  label: '0 A – 100 A' },
+  // Frecuencia de la fuente AC. Rango alineado con el formulario admin
+  // (RecuadroParametros.FuenteParams: min=0.01, max=1e9).
+  frequency:       { min: 0.01,    max: 1e9,   unit: 'Hz', label: '0.01 Hz – 1 GHz' },
   diode:   { min: -Infinity, max: Infinity, unit: '', label: 'Valor Fijo' },
   bjt:     { min: -Infinity, max: Infinity, unit: '', label: 'Valor Fijo' },
   fet:     { min: -Infinity, max: Infinity, unit: '', label: 'Valor Fijo' },

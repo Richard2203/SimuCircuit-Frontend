@@ -12,7 +12,7 @@ const RANGE_DEG = 300;
 
 
 
-/* Inyección de estilos del slider */
+/* Inyeccion de estilos del slider */
 let stylesInjected = false;
 function injectStyles() {
   if (stylesInjected || typeof document === 'undefined') return;
@@ -51,7 +51,7 @@ function injectStyles() {
 
 /* Helpers*/
 
-/** Pct [0-1] del valor dentro del rango. Evita división por cero. */
+/** Pct [0-1] del valor dentro del rango. Evita division por cero. */
 const toPct = (val, min, max) => (max > min ? (val - min) / (max - min) : 0);
 
 /** Formatea un valor de resistencia a string legible. */
@@ -219,7 +219,7 @@ export const Potentiometer = ({
    * Es el unico momento en que se disparan re-renders globales.
    *
    * cursor_pos (0–100) refleja la posicion real del wiper para que el
-   * backend pueda expandir correctamente el potenciómetro en dos
+   * backend pueda expandir correctamente el potenciometro en dos
    * resistencias en serie: Ra = value * (cursor_pos/100), Rb = value - Ra.
    */
   const onRangeCommit = useCallback((e) => {
@@ -229,7 +229,7 @@ export const Potentiometer = ({
     const cursorPos  = maxVal > minVal
       ? Math.round(((v - minVal) / (maxVal - minVal)) * 100)
       : 50;
-    setValue(v, { cursor_pos: cursorPos });
+    setValue(v, { cursor_pos: cursorPos, wiper: cursorPos / 100 });
     eventBus.publish('COMPONENT_VALUE_CHANGED', { id, type: 'resistor', value: v });
   }, [setValue, id, minVal, maxVal]);
 
@@ -337,7 +337,7 @@ export const Potentiometer = ({
             const cursorPos  = newMax > minVal
               ? Math.round(((liveVal - minVal) / (newMax - minVal)) * 100)
               : 50;
-            setValue(v, { cursor_pos: Math.max(0, Math.min(100, cursorPos)) });
+            setValue(v, { cursor_pos: Math.max(0, Math.min(100, cursorPos)), wiper: Math.max(0, Math.min(100, cursorPos)) / 100 });
             setLiveVal(v);
             if (v > maxVal) setMaxVal(v);
             onValueChange?.(v);
@@ -353,7 +353,7 @@ export const Potentiometer = ({
       <circle cx={pinW.x} cy={pinW.y} r="5" fill="transparent" data-pin="b"/>
       <circle cx={pinB.x} cy={pinB.y} r="5" fill="transparent" data-pin="w"/>
 
-      {/* Popup de ajuste fino — montado en document.body via portal */}
+      {/* Popup de ajuste fino */}
       {open && createPortal(
         <div
           id={`pot-popup-${id}`}
@@ -383,11 +383,6 @@ export const Potentiometer = ({
             <span style={{ fontSize: 10, color: '#5a6278' }}>{formatResistance(maxVal)}</span>
           </div>
 
-          {/*
-            El slider usa liveVal como value -> se mueve sin bloqueos.
-            onChange actualiza SOLO liveVal (sin mediator).
-            onPointerUp hace el commit real al hook + mediator.
-          */}
           <input
             type="range"
             className="pot-range"
@@ -398,7 +393,7 @@ export const Potentiometer = ({
             onChange={onRangeChange}
             onPointerDown={onRangePointerDown}
             onPointerUp={onRangeCommit}
-            // Fallback para entornos sin Pointer Events (algunos moviles/testeo)
+            // Fallback para entornos sin Pointer Events
             onMouseUp={onRangeCommit}
             style={{ '--p': `${pct * 100}%` }}
           />
