@@ -1,0 +1,152 @@
+.admin-builder__placement {
+  margin: 8px 0 4px;
+  padding: 10px 12px;
+  background: rgba(108, 99, 255, 0.04);
+  border: 1px dashed rgba(108, 99, 255, 0.25);
+  border-radius: var(--r-md, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-builder__placement-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Modo edicion */
+
+.admin-builder--editing {
+  border-left: 3px solid #fbbf24;
+  padding-left: 10px;
+  margin-left: -10px;
+  background: rgba(251, 191, 36, 0.03);
+  border-radius: 4px;
+}
+
+/* Botones de nudge */
+
+.admin-comp-row__nudge {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 4px;
+  margin-right: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.admin-comp-row:hover .admin-comp-row__nudge,
+.admin-comp-row:focus-within .admin-comp-row__nudge,
+.admin-comp-row--hover .admin-comp-row__nudge,
+.admin-comp-row--selected .admin-comp-row__nudge {
+  opacity: 1;
+}
+
+.admin-nudge-btn {
+  width: 22px;
+  height: 22px;
+  background: rgba(108, 99, 255, 0.08);
+  border: 1px solid rgba(108, 99, 255, 0.22);
+  border-radius: 4px;
+  color: var(--accent, #a78bfa);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.admin-nudge-btn:hover {
+  background: rgba(108, 99, 255, 0.2);
+  border-color: rgba(108, 99, 255, 0.5);
+  color: #fff;
+}
+
+.admin-nudge-btn:active { transform: translateY(1px); }
+.admin-nudge-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.admin-nudge-btn--rotate {
+  margin-left: 4px;
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.25);
+  color: #fbbf24;
+}
+.admin-nudge-btn--rotate:hover {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #fff;
+}
+
+/* Fila clickable para editar */
+
+.admin-comp-row {
+  min-height: 32px;
+  cursor: default;
+}
+
+.admin-comp-row--selected {
+  background: rgba(251, 191, 36, 0.10);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.admin-comp-row__main {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+
+.admin-comp-row__main:hover .admin-comp-row__id {
+  text-decoration: underline;
+}
+
+/* Pills de nodo clickables (modo inline edit) */
+
+.admin-node-pill--clickable {
+  background: rgba(108, 99, 255, 0.12);
+  color: var(--accent, #a78bfa);
+  border: 1px dashed transparent;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  font-family: inherit;
+}
+
+.admin-node-pill--clickable:hover {
+  background: rgba(108, 99, 255, 0.22);
+  border-color: rgba(108, 99, 255, 0.45);
+}
+
+.admin-node-pill-input {
+  width: 36px;
+  background: #1e1e2e;
+  border: 1px solid #a78bfa;
+  border-radius: 8px;
+  color: #a6e22e;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  outline: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.18);
+}

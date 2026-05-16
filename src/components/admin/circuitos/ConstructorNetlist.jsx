@@ -1,17 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RecuadroParametros } from '../shared/RecuadroParametros';
 import {
   TIPOS_COMPONENTE as TIPOS_VALIDOS,
-  CANONICAL_PINS,
-  PREFIJOS,
   RANGOS,
   UNIDADES_VALIDAS,
   ComponentFactory,
   Component,
+  labelForTipo,
 } from '../../../domain';
+import {
+  DIRECCIONES,
+  ROTACIONES,
+  rotacionSugerida,
+  etiquetaDireccion,
+  etiquetaRotacion,
+} from './circuitLayout';
 
-
- // Lista de tipos para el <select>. 
+/* Lista de tipos para el select de tipo */
 const TIPOS_COMPONENTE = [
   { value: 'resistencia',          label: 'Resistencia' },
   { value: 'resistencia_variable', label: 'Resistencia variable (potenciómetro)' },
@@ -25,8 +30,7 @@ const TIPOS_COMPONENTE = [
   { value: 'regulador_voltaje',    label: 'Regulador de voltaje' },
 ];
 
-
-// Pines visibles en el formulario, por tipo.
+/* Pines visibles en el formulario por tipo */
 const PINES_POR_TIPO = {
   resistencia: [
     { key: 'a', label: 'Nodo A (terminal izquierdo)' },
@@ -74,25 +78,22 @@ const PINES_POR_TIPO = {
   ],
 };
 
-/** Multiplicadores SI */
+const TIPOS_SIN_VALOR_NUMERICO = new Set([
+  'diodo', 'transistor_bjt', 'transistor_fet', 'regulador_voltaje',
+]);
+
 const SUFIJOS = { p: 1e-12, n: 1e-9, u: 1e-6, μ: 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9 };
 
-/**
- * Genera un designador unico (R1, V1, …) para un tipo dado.
- * Reutiliza el helper centralizado de Component (mismo prefijo, mismo algoritmo).
- */
 function generarId(tipo, lista) {
   if (!TIPOS_VALIDOS.includes(tipo)) return `X${lista.length + 1}`;
   return Component.generarId(tipo, lista);
 }
 
-/** Devuelve un objeto vacio con las keys de los pines del tipo. */
 function nodosVaciosPara(tipo) {
   const pines = PINES_POR_TIPO[tipo] ?? [];
   return Object.fromEntries(pines.map((p) => [p.key, '']));
 }
 
-/** Ejemplos contextuales por tipo. */
 function ejemploPorTipo(tipo) {
   switch (tipo) {
     case 'resistencia':
@@ -105,14 +106,11 @@ function ejemploPorTipo(tipo) {
   }
 }
 
-/** Formatea el valor crudo a notacion de ingenieria para feedback inmediato. */
 function formatearValorParaPreview(rawVal, tipo) {
   const parsed = parseValue(rawVal, tipo);
   if (parsed === null || typeof parsed === 'object') return '';
-
   const unit = RANGOS[tipo]?.unit ?? '';
-  const abs  = Math.abs(parsed);
-
+  const abs = Math.abs(parsed);
   let coef, prefix;
   if      (abs >= 1e9)  { coef = parsed / 1e9;  prefix = 'G'; }
   else if (abs >= 1e6)  { coef = parsed / 1e6;  prefix = 'M'; }
@@ -122,27 +120,21 @@ function formatearValorParaPreview(rawVal, tipo) {
   else if (abs >= 1e-6) { coef = parsed * 1e6;  prefix = 'µ'; }
   else if (abs >= 1e-9) { coef = parsed * 1e9;  prefix = 'n'; }
   else                  { coef = parsed * 1e12; prefix = 'p'; }
-
   const num = Number(coef.toFixed(3)).toString();
   return `= ${num} ${prefix}${unit}`;
 }
 
-/** parseValue — Acepta "330", "11k", "11kΩ", "5V", "100mF", "2.2u" */
 function parseValue(str, tipo) {
   if (!str) return null;
   const s = String(str).trim();
   if (!s) return null;
-
   const re = /^([+-]?[0-9]*\.?[0-9]+)\s*([pnuμmkKMG]?)([a-zA-ZΩμ]*)$/;
   const match = s.match(re);
   if (!match) return null;
-
-  const num    = parseFloat(match[1]);
+  const num = parseFloat(match[1]);
   const sufijo = match[2];
   const unidad = (match[3] ?? '').replace(/μ/g, 'u');
-
   if (Number.isNaN(num)) return null;
-
   if (unidad && tipo && UNIDADES_VALIDAS[tipo]) {
     const unidadNorm = unidad.toUpperCase();
     const validas = UNIDADES_VALIDAS[tipo].map((u) => u.toUpperCase());
@@ -150,14 +142,41 @@ function parseValue(str, tipo) {
       return { __unidadInvalida: unidad, esperada: UNIDADES_VALIDAS[tipo][0] };
     }
   }
-
   return num * (SUFIJOS[sufijo] ?? 1);
+}
+
+/**
+ * Normaliza un value tipeado por el usuario a un string "canonico" que el
+ * renderer y los modelos del simulador puedan interpretar.
+ *
+ * Funcion para descartar unidad-etra del value
+ * "12V"  -> "12", "5mA" -> "5m", "10kΩ" -> "10k".
+ *
+ * Si el value no se puede parsear se devuelve tal cual: diodos, BJT, regulador
+ *
+ * @param {string} rawVal
+ * @param {string} tipo
+ * @returns {string}
+ */
+function normalizarValueParaBackend(rawVal, tipo) {
+  if (!rawVal) return '';
+  const s = String(rawVal).trim();
+  if (!s) return '';
+  // Para tipos sin valor numerico, conservar la cadena original
+  if (TIPOS_SIN_VALOR_NUMERICO.has(tipo)) return s;
+  // Descomponer "<numero><sufijoSI><unidad?>" y reconstruir sin la unidad
+  const re = /^([+-]?[0-9]*\.?[0-9]+)\s*([pnuμmkKMG]?)([a-zA-ZΩμ]*)$/;
+  const match = s.match(re);
+  if (!match) return s;            // no parseable: lo dejamos tal cual
+  const num = match[1];
+  const sufijo = match[2] || '';
+  // Devolvemos numero + sufijo, sin la unidad-letra final
+  return `${num}${sufijo}`;
 }
 
 function validarValue(tipo, rawVal) {
   const rango = RANGOS[tipo];
   if (!rango || rango.min === null) return null;
-
   const parsed = parseValue(rawVal, tipo);
   if (parsed === null) return 'Formato invalido. Ej: 330, 1k, 5m, 12V, 100uF';
   if (typeof parsed === 'object' && parsed.__unidadInvalida) {
@@ -169,7 +188,6 @@ function validarValue(tipo, rawVal) {
   return null;
 }
 
-/** Parametros por defecto (delegamos a las defaults de cada subclase). */
 function defaultParams(tipo) {
   if (!TIPOS_VALIDOS.includes(tipo)) return {};
   const dummy = ComponentFactory.crearVacio(tipo);
@@ -177,25 +195,84 @@ function defaultParams(tipo) {
 }
 
 /**
- * ConstructorNetlist — Subformulario para agregar componentes uno por uno.
+ * ConstructorNetlist — Form de agregar / editar componente (Approach C v2).
  *
- * Devuelve a `onAgregar` un objeto con la forma "admin".
- * Quien lo reciba debe usar `ComponentFactory.fromAdmin`
- * (o `ComponentFactory.from`) si quiere una instancia tipada.
+ * Modo EDICION: cuando se pasa editing (un componente existente), el
+ * formulario se rellena con sus valores. Al pulsar "Guardar cambios" se
+ * llama a onActualizar(compEditado). El boton "Limpiar" cancela.
+ *
+ * @param {{
+ *   componentes: Array,
+ *   onAgregar:    (rawComp: object) => void,
+ *   onActualizar?:(rawComp: object) => void,
+ *   editing?:     object | null,
+ *   onCancelEdit?: () => void,
+ * }} props
  */
-export function ConstructorNetlist({ componentes, onAgregar }) {
-  const [tipo,     setTipo]     = useState('');
-  const [value,    setValue]    = useState('');
-  const [nodos,    setNodos]    = useState({});
-  const [rotation, setRotation] = useState(0);
-  const [params,   setParams]   = useState({});
-  const [focusPin, setFocusPin] = useState(null);
-  const [errVal,   setErrVal]   = useState('');
+export function ConstructorNetlist({
+  componentes,
+  onAgregar,
+  onActualizar,
+  editing = null,
+  onCancelEdit,
+}) {
+  const isEditing = Boolean(editing);
+
+  const [tipo,      setTipo]      = useState('');
+  const [value,     setValue]     = useState('');
+  const [nodos,     setNodos]     = useState({});
+  const [rotation,  setRotation]  = useState(0);
+  const [params,    setParams]    = useState({});
+  const [focusPin,  setFocusPin]  = useState(null);
+  const [errVal,    setErrVal]    = useState('');
+  const [refId,     setRefId]     = useState('');
+  const [direccion, setDireccion] = useState(DIRECCIONES.DERECHA);
+
+  /* Cargar valores del componente al entrar en modo edicion */
+  useEffect(() => {
+    if (!editing) {
+      // Salimos de edicion: limpia el form
+      setTipo(''); setValue(''); setNodos({}); setRotation(0);
+      setParams({}); setErrVal('');
+      return;
+    }
+    setTipo(editing.type ?? '');
+    setValue(String(editing.value ?? ''));
+    // Si viene como Component instance, getNodos no aplica para el form admin
+    const nodosAdmin = editing.nodos
+      ?? Object.fromEntries(
+        Object.entries(editing.nodes ?? {}).map(([k, v]) => [
+          k,
+          typeof v === 'object' ? v.nodo : v,
+        ])
+      );
+    // Filtra solo las keys conocidas para este tipo
+    const pines = PINES_POR_TIPO[editing.type] ?? [];
+    const filtered = {};
+    pines.forEach((p) => { filtered[p.key] = String(nodosAdmin[p.key] ?? ''); });
+    setNodos(filtered);
+    setRotation(Number(editing.rotation) || 0);
+    setParams({ ...(editing.params ?? {}) });
+    setErrVal('');
+  }, [editing]);
+
+  /* Sugerir rotacion al cambiar direccion (solo agregar, no editar) */
+  useEffect(() => {
+    if (!isEditing && refId) setRotation(rotacionSugerida(direccion));
+  }, [direccion, refId, isEditing]);
+
+  /* Si el componente referenciado desaparece, limpia */
+  useEffect(() => {
+    if (refId && !componentes.some((c) => c.id === refId)) setRefId('');
+  }, [componentes, refId]);
 
   const pinesActuales = tipo ? (PINES_POR_TIPO[tipo] ?? []) : [];
+  const hayExistentes = componentes.length > 0;
 
-  // Nodos ya usados por cualquier pin de cualquier componente.
-  // Soporta tanto componentes JSON (con `nodos`) como instancias Component.
+  const existentesOrdenados = [...componentes]
+    .filter((c) => c.id !== editing?.id)
+    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+
   const nodosExistentes = [
     ...new Set(
       componentes.flatMap((c) => {
@@ -217,7 +294,11 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
 
   function handleValueChange(v) {
     setValue(v);
-    if (tipo) setErrVal(validarValue(tipo, v) ?? '');
+    if (tipo && !TIPOS_SIN_VALOR_NUMERICO.has(tipo)) {
+      setErrVal(validarValue(tipo, v) ?? '');
+    } else {
+      setErrVal('');
+    }
   }
 
   function handleParamChange(campo, val) {
@@ -228,46 +309,78 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
     setParams((p) => ({ ...p, ...bandas }));
   }
 
+  /**
+   * Carga de parametros de acuerdo al tipo de componente
+   */
+  function handleParamsBulkChange(nuevosParams) {
+    setParams((p) => ({ ...p, ...nuevosParams }));
+  }
+
   function handleNodoChange(pinKey, valor) {
     setNodos((n) => ({ ...n, [pinKey]: valor }));
   }
 
-  const idVisual = tipo ? generarId(tipo, componentes) : '—';
+  const idVisual = isEditing
+    ? editing.id
+    : (tipo ? generarId(tipo, componentes) : '—');
 
   const todosLosPinesLlenos = pinesActuales.every(
     (p) => (nodos[p.key] ?? '').trim() !== ''
   );
 
+  const requiereValor = tipo && !TIPOS_SIN_VALOR_NUMERICO.has(tipo);
   const puedeAgregar =
     tipo !== '' &&
     todosLosPinesLlenos &&
     errVal === '' &&
-    (RANGOS[tipo]?.min === null || value.trim() !== '');
+    (!requiereValor || value.trim() !== '');
 
   function handleLimpiar() {
+    if (isEditing) {
+      onCancelEdit?.();
+      return;
+    }
     setTipo(''); setValue(''); setNodos({}); setRotation(0);
     setParams({}); setErrVal('');
   }
 
-  function handleAgregar() {
+  function handleAgregarOActualizar() {
     if (!puedeAgregar) return;
     const nodosFinal = Object.fromEntries(
       pinesActuales.map((p) => [p.key, (nodos[p.key] ?? '').trim()])
     );
-    onAgregar({
+    // Normalizar el value para que el renderer pueda parsearlo correctamente.
+    // "12V" -> "12", "100mA" -> "100m", "10kΩ" -> "10k".
+    const valueNormalizado = normalizarValueParaBackend(value.trim(), tipo);
+    const payload = {
       id:       idVisual,
       type:     tipo,
-      value:    value.trim(),
+      value:    valueNormalizado,
       rotation: Number(rotation),
       nodos:    nodosFinal,
       params:   { ...params },
-    });
+    };
+    if (isEditing) {
+      onActualizar?.({ ...payload, position: editing.position });
+    } else {
+      onAgregar?.({
+        ...payload,
+        __placement: {
+          refId:     refId || null,
+          direccion: refId ? direccion : null,
+        },
+      });
+    }
     handleLimpiar();
   }
 
   return (
-    <div className="admin-builder">
-      <p className="admin-subsection-title">Agregar componente</p>
+    <div className={`admin-builder ${isEditing ? 'admin-builder--editing' : ''}`}>
+      <p className="admin-subsection-title">
+        {isEditing
+          ? <>Editando componente <span style={{ color: 'var(--accent)' }}>{editing.id}</span></>
+          : 'Agregar componente'}
+      </p>
 
       <div className="admin-builder__row">
         <FieldWrap label="ID temporal (visual, no se envía al backend)">
@@ -277,7 +390,12 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
 
       <div className="admin-builder__row">
         <FieldWrap label="Tipo de componente">
-          <select className="admin-select admin-select--sm" value={tipo} onChange={(e) => handleTipoChange(e.target.value)}>
+          <select
+            className="admin-select admin-select--sm"
+            value={tipo}
+            onChange={(e) => handleTipoChange(e.target.value)}
+            disabled={isEditing}
+          >
             <option value="">— Seleccionar —</option>
             {TIPOS_COMPONENTE.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
@@ -285,13 +403,56 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
 
         <FieldWrap label="Rotación">
           <select className="admin-select admin-select--sm" value={rotation} onChange={(e) => setRotation(Number(e.target.value))}>
-            <option value={0}>0°</option>
-            <option value={90}>90°</option>
+            {ROTACIONES.map((r) => <option key={r} value={r}>{etiquetaRotacion(r)}</option>)}
           </select>
         </FieldWrap>
       </div>
 
-      {tipo && RANGOS[tipo]?.min !== null && (
+      {/* Bloque de colocacion (solo en modo agregar) */}
+      {!isEditing && (
+        <div className="admin-builder__placement">
+          <p className="admin-builder__placement-title">Colocación en el circuito</p>
+
+          {!hayExistentes ? (
+            <p className="admin-input-hint" style={{ margin: 0 }}>
+              Este será el <strong>primer componente</strong>; se colocará en el origen del canvas.
+            </p>
+          ) : (
+            <div className="admin-builder__row">
+              <FieldWrap label="Respecto a">
+                <select
+                  className="admin-select admin-select--sm"
+                  value={refId}
+                  onChange={(e) => setRefId(e.target.value)}
+                >
+                  <option value="">— Origen (sin referencia) —</option>
+                  {existentesOrdenados.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.id} ({c.value || labelForTipo(c.type)})
+                    </option>
+                  ))}
+                </select>
+              </FieldWrap>
+
+              <FieldWrap label="Dirección">
+                <select
+                  className="admin-select admin-select--sm"
+                  value={direccion}
+                  onChange={(e) => setDireccion(e.target.value)}
+                  disabled={!refId}
+                >
+                  {Object.values(DIRECCIONES).map((d) => (
+                    <option key={d} value={d}>{etiquetaDireccion(d)}</option>
+                  ))}
+                </select>
+              </FieldWrap>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Campo de valor: solo para tipos con valor numerico */}
+      {requiereValor && (
         <div className="admin-builder__row">
           <FieldWrap label={`Valor — ${ejemploPorTipo(tipo)}`}>
             <div className="admin-input-with-unit">
@@ -316,6 +477,7 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
         </div>
       )}
 
+      {/* Nodos */}
       {tipo && pinesActuales.length > 0 && (
         <>
           {tipo === 'resistencia_variable' && (
@@ -355,6 +517,7 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
           onChange={handleParamChange}
           onBandasChange={handleBandasChange}
           onValueChange={handleValueChange}
+          onParamsBulkChange={handleParamsBulkChange}
           value={value}
         />
       )}
@@ -363,19 +526,26 @@ export function ConstructorNetlist({ componentes, onAgregar }) {
         <button
           type="button"
           className="admin-btn admin-btn--primary admin-btn--sm"
-          onClick={handleAgregar}
+          onClick={handleAgregarOActualizar}
           disabled={!puedeAgregar}
         >
-          + Agregar componente
+          {isEditing ? '💾 Guardar cambios' : '+ Agregar componente'}
         </button>
         <button
           type="button"
           className="admin-btn admin-btn--cancel admin-btn--sm"
           onClick={handleLimpiar}
         >
-          Limpiar
+          {isEditing ? 'Cancelar edición' : 'Limpiar'}
         </button>
       </div>
+
+      {!isEditing && tipo && hayExistentes && (
+        <p className="admin-input-hint" style={{ marginTop: 6 }}>
+          Tip: al agregar, podrás <strong>moverlo</strong> con las flechas en la lista o
+          hacer clic en él en el preview para <strong>editar</strong> sus propiedades.
+        </p>
+      )}
     </div>
   );
 }
@@ -404,19 +574,11 @@ function FieldWrap({ label, children }) {
 
 export { PINES_POR_TIPO };
 
-/**
- * @param {object|import('../../../domain').Component} comp
- */
 export function normalizarComponente(comp) {
   if (typeof comp.toAdminJSON === 'function') return comp.toAdminJSON();
   if (comp.nodos && typeof comp.nodos === 'object') return comp;
-
-  // Compat retroactiva: nodo_a / nodo_b → { a, b }
   if ('nodo_a' in comp || 'nodo_b' in comp) {
-    return {
-      ...comp,
-      nodos: { a: comp.nodo_a ?? '', b: comp.nodo_b ?? '' },
-    };
+    return { ...comp, nodos: { a: comp.nodo_a ?? '', b: comp.nodo_b ?? '' } };
   }
   return { ...comp, nodos: nodosVaciosPara(comp.type) };
 }

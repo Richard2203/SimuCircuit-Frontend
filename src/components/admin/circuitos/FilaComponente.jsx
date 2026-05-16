@@ -1,48 +1,84 @@
+import { useState, useEffect } from 'react';
 import { Component, labelForTipo, labelForPin, resolvePinKey } from '../../../domain';
+import { DIRECCIONES } from './circuitLayout';
 
 /**
- * FilaComponente — Fila individual de un componente en la lista de la netlist.
- *
- * Acepta tanto Component (instancia tipada) como objetos JSON crudos del
- * formato admin (con `nodos`).  Internamente normaliza al formato admin para
- * que el resto del archivo no tenga que ramificar.
- *
- * @param {{
- *   comp: import('../../../domain').Component | { id, type, value, nodos: Record<string,string> },
- *   hoveredId: string|null,
- *   onHover: (id: string|null) => void,
- *   onEliminar: (id: string) => void,
- * }} props
+ * FilaComponente — Fila individual de un componente en la lista.
  */
-export function FilaComponente({ comp, hoveredId, onHover, onEliminar }) {
+export function FilaComponente({
+  comp,
+  hoveredId,
+  selectedId,
+  onHover,
+  onEliminar,
+  onMover,
+  onRotar,
+  onEditar,
+  onChangeNodo,
+}) {
   const view = toViewModel(comp);
-  const highlighted = hoveredId === view.id;
+  const isHovered  = hoveredId === view.id;
+  const isSelected = selectedId === view.id;
+  const supportsLayout = Boolean(onMover || onRotar);
 
   return (
     <div
-      className={`admin-comp-row ${highlighted ? 'admin-comp-row--hover' : ''}`}
-      onMouseEnter={() => onHover(view.id)}
-      onMouseLeave={() => onHover(null)}
+      className={`admin-comp-row ${isHovered ? 'admin-comp-row--hover' : ''} ${isSelected ? 'admin-comp-row--selected' : ''}`}
+      onMouseEnter={() => onHover?.(view.id)}
+      onMouseLeave={() => onHover?.(null)}
     >
       <div className="admin-comp-row__icon"><TypeIcon type={view.type} /></div>
-      <span className="admin-comp-row__id">{view.id}</span>
-      <span className="admin-comp-row__type">{labelForTipo(view.type)}</span>
-      <span className="admin-comp-row__value">{view.value || '—'}</span>
+
+      {/* ID + tipo + valor son clickables para editar (zona principal) */}
+      <button
+        type="button"
+        className="admin-comp-row__main"
+        onClick={() => onEditar?.(view.id)}
+        title="Click para editar este componente"
+      >
+        <span className="admin-comp-row__id">{view.id}</span>
+        <span className="admin-comp-row__type">{labelForTipo(view.type)}</span>
+        <span className="admin-comp-row__value">{view.value || '—'}</span>
+      </button>
+
+      {/* Pines / nodos editables */}
       <span className="admin-comp-row__nodes">
         {view.pines.map(({ pinAdmin, pinCanonico, nodo }, i) => (
           <span key={pinAdmin} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
             {i > 0 && <span className="admin-node-arrow">·</span>}
             <span className="admin-pin-label">{labelForPin(pinCanonico) ?? pinAdmin}</span>
             <span style={{ fontSize: 9, color: 'var(--text-hint)' }}>=</span>
-            <NodeBadge>{nodo || '?'}</NodeBadge>
+            <NodoEditable
+              valor={nodo}
+              onChange={onChangeNodo
+                ? (newVal) => onChangeNodo(view.id, pinAdmin, newVal)
+                : null
+              }
+            />
           </span>
         ))}
       </span>
+
+      {supportsLayout && (
+        <div className="admin-comp-row__nudge" aria-label="Controles de posición">
+          <NudgeBtn title="Mover izquierda" disabled={!onMover}
+            onClick={() => onMover?.(view.id, DIRECCIONES.IZQUIERDA)}>‹</NudgeBtn>
+          <NudgeBtn title="Mover arriba" disabled={!onMover}
+            onClick={() => onMover?.(view.id, DIRECCIONES.ARRIBA)}>∧</NudgeBtn>
+          <NudgeBtn title="Mover abajo" disabled={!onMover}
+            onClick={() => onMover?.(view.id, DIRECCIONES.ABAJO)}>∨</NudgeBtn>
+          <NudgeBtn title="Mover derecha" disabled={!onMover}
+            onClick={() => onMover?.(view.id, DIRECCIONES.DERECHA)}>›</NudgeBtn>
+          <NudgeBtn title="Rotar 90° (0→90→180→270)" disabled={!onRotar} variant="rotate"
+            onClick={() => onRotar?.(view.id)}>↻</NudgeBtn>
+        </div>
+      )}
+
       <button
         type="button"
         className="admin-comp-row__del"
         title="Eliminar componente"
-        onClick={() => onEliminar(view.id)}
+        onClick={() => onEliminar?.(view.id)}
       >
         <TrashIcon />
       </button>
@@ -51,11 +87,72 @@ export function FilaComponente({ comp, hoveredId, onHover, onEliminar }) {
 }
 
 /**
- * Convierte cualquier forma de componente a un view-model uniforme:
- *   { id, type, value, pines: [{ pinAdmin, pinCanonico, nodo }] }
+ * Badge de nodo que al hacer click se vuelve input editable.
  */
+function NodoEditable({ valor, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(valor ?? '');
+
+  useEffect(() => { setDraft(valor ?? ''); }, [valor]);
+
+  if (!onChange) return <span className="admin-node-pill">{valor || '?'}</span>;
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="admin-node-pill admin-node-pill--clickable"
+        title="Click para cambiar el nodo"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+      >
+        {valor || '?'}
+      </button>
+    );
+  }
+
+  function commit() {
+    const trimmed = String(draft).trim();
+    if (trimmed && trimmed !== valor) {
+      onChange(trimmed);
+    }
+    setEditing(false);
+  }
+
+  return (
+    <input
+      autoFocus
+      type="text"
+      className="admin-node-pill-input"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); setEditing(false); setDraft(valor ?? ''); }
+      }}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
+}
+
+function NudgeBtn({ children, title, onClick, disabled, variant }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={`admin-nudge-btn ${variant === 'rotate' ? 'admin-nudge-btn--rotate' : ''}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function toViewModel(comp) {
-  // Caso 1: instancia Component -> usar nodes canonicos directamente
   if (comp instanceof Component) {
     const adminJson = comp.toAdminJSON();
     return {
@@ -69,8 +166,6 @@ function toViewModel(comp) {
       })),
     };
   }
-
-  // Caso 2: JSON crudo (formato admin con `nodos`)
   return {
     id:    comp.id,
     type:  comp.type,
@@ -83,54 +178,49 @@ function toViewModel(comp) {
   };
 }
 
-/**
- * ListaComponentesAgrupada — Componentes agrupados por nodo compartido.
- */
-export function ListaComponentesAgrupada({ componentes, hoveredId, onHover, onEliminar }) {
+export function ListaComponentesAgrupada({
+  componentes,
+  hoveredId,
+  selectedId,
+  onHover,
+  onEliminar,
+  onMover,
+  onRotar,
+  onEditar,
+  onChangeNodo,
+}) {
   if (componentes.length === 0) {
     return <p style={{ fontSize: 12, color: 'var(--text-hint)', padding: '10px 0' }}>Sin componentes aún.</p>;
   }
 
-  const nodoMap = {};
-  componentes.forEach((c) => {
-    const view = toViewModel(c);
-    view.pines
-      .map((p) => p.nodo)
-      .filter(Boolean)
-      .forEach((n) => {
-        if (!nodoMap[n]) nodoMap[n] = [];
-        if (!nodoMap[n].find((x) => x.id === view.id)) nodoMap[n].push(c);
-      });
-  });
-
-  const nodos = Object.keys(nodoMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  // Orden estable: por designador (R1, R2, ..., V1, V2, ...)
+  const ordenados = [...componentes].sort((a, b) =>
+    String(a.id).localeCompare(String(b.id), undefined, { numeric: true })
+  );
 
   return (
     <div className="admin-comp-group">
-      {nodos.map((nodo) => (
-        <div key={nodo}>
-          <p className="admin-comp-group__node">Nodo {nodo}</p>
-          <div className="admin-comp-group__list">
-            {nodoMap[nodo].map((c) => {
-              const id = c instanceof Component ? c.id : c.id;
-              return (
-                <FilaComponente
-                  key={`${nodo}-${id}`}
-                  comp={c}
-                  hoveredId={hoveredId}
-                  onHover={onHover}
-                  onEliminar={onEliminar}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      <div className="admin-comp-group__list">
+        {ordenados.map((c) => (
+          <FilaComponente
+            key={c.id}
+            comp={c}
+            hoveredId={hoveredId}
+            selectedId={selectedId}
+            onHover={onHover}
+            onEliminar={onEliminar}
+            onMover={onMover}
+            onRotar={onRotar}
+            onEditar={onEditar}
+            onChangeNodo={onChangeNodo}
+          />
+        ))}
+      </div>
     </div>
   );
 }
 
-/* ── TypeIcon ─────────────────────────────────── */
+/* TypeIcon */
 function TypeIcon({ type }) {
   const color = 'var(--accent)';
   switch (type) {
@@ -205,10 +295,6 @@ function TypeIcon({ type }) {
         </svg>
       );
   }
-}
-
-function NodeBadge({ children }) {
-  return <span className="admin-node-pill">{children}</span>;
 }
 
 function TrashIcon() {

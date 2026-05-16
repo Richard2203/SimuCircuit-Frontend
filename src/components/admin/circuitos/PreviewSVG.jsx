@@ -1,126 +1,232 @@
 import { useMemo } from 'react';
-import { NetlistRenderer } from '../../Simulator/NetlistRenderer';
+
+import { calcViewBox, getPins, resolvePin, getNodoNum } from '../../Simulator/renderer/geometry.js';
+import { CANVAS_SCALE } from '../../Simulator/renderer/constants.js';
+import { getComponentBBox } from '../../Simulator/renderer/collision.js';
+import { WireLayer } from '../../Simulator/renderer/wireRouting.jsx';
+import { renderComponent, GndSymbol } from '../../Simulator/renderer/componentRenderer.jsx';
+import { CompLabels, NodeLabels } from '../../Simulator/renderer/labels.jsx';
+
+/* Helpers locales */
+function findLowestGndPin(netlist) {
+  const gndPins = [];
+  netlist.forEach((comp) => {
+    const pins = getPins(comp);
+    Object.entries(comp.nodes ?? {}).forEach(([pinKey, pinData]) => {
+      if (getNodoNum(pinData) === '0') {
+        const p = resolvePin(pins, pinKey);
+        if (p) gndPins.push(p);
+      }
+    });
+  });
+  return gndPins.length > 0
+    ? gndPins.reduce((acc, p) => (p.y > acc.y ? p : acc), gndPins[0])
+    : null;
+}
+
+function toRenderNetlist(componentes) {
+  return componentes
+    .map((c) => {
+      if (c && typeof c.toJSON === 'function') return c.toJSON();
+      if (c && c.nodos && !c.nodes) {
+        const nodes = {};
+        Object.entries(c.nodos).forEach(([k, v]) => {
+          nodes[k] = { nodo: String(v ?? ''), x: null, y: null };
+        });
+        return { ...c, nodes };
+      }
+      return c;
+    })
+    .filter(Boolean);
+}
 
 /**
- * PreviewSVG — Vista previa del circuito en tiempo real.
+ * Calcula un "key" unico que cambia cuando algo relevante para el render
+ * cambia. Esto fuerza el remontaje de los modelos del simulador (que usan
+ * useState(initialValue) y por tanto no responden a cambios posteriores
+ * de initialValue).
+ */
+function makeNetlistKey(netlist) {
+  return netlist
+    .map((c) => {
+      const pos = c.position ?? {};
+      const params = c.params ?? {};
+      return [
+        c.id, c.type, c.value, c.rotation,
+        pos.x, pos.y,
+        params.tipo, params.dcOrAc, params.frequency,
+        params.tipo_dioelectrico,
+      ].join(':');
+    })
+    .join('|');
+}
+
+/* Hover / selection ring */
+
+function FocusRing({ comp, variant = 'hover' }) {
+  if (!comp) return null;
+  const bbox = getComponentBBox(comp);
+  const PAD = 8;
+  const stroke = variant === 'selected' ? '#fbbf24' : 'rgba(167,139,250,0.7)';
+  const fill = variant === 'selected' ? 'rgba(251,191,36,0.06)' : 'rgba(167,139,250,0.06)';
+  return (
+    <rect
+      x={bbox.minX - PAD}
+      y={bbox.minY - PAD}
+      width={bbox.maxX - bbox.minX + PAD * 2}
+      height={bbox.maxY - bbox.minY + PAD * 2}
+      rx={5}
+      fill={fill}
+      stroke={stroke}
+      strokeWidth={1.6}
+      strokeDasharray={variant === 'selected' ? undefined : '4 3'}
+      pointerEvents="none"
+    />
+  );
+}
+
+/* Hitbox transparente para click-to-edit */
+
+function ClickHitbox({ comp, onClick }) {
+  const bbox = getComponentBBox(comp);
+  const PAD = 6;
+  return (
+    <rect
+      x={bbox.minX - PAD}
+      y={bbox.minY - PAD}
+      width={bbox.maxX - bbox.minX + PAD * 2}
+      height={bbox.maxY - bbox.minY + PAD * 2}
+      rx={4}
+      fill="transparent"
+      pointerEvents="all"
+      style={{ cursor: 'pointer' }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(comp.id);
+      }}
+    />
+  );
+}
+
+/* Componente principal */
+
+/**
+ * PreviewSVG — Vista previa del circuito (read-only + click-to-edit).
  *
  * @param {{
- *   componentes: Array<{ id, type, value, nodos, rotation, params }>,
+ *   componentes: Array,
  *   hoveredId?: string,
+ *   selectedId?: string,
  *   onHoverComp?: (id: string|null) => void,
+ *   onEditComp?: (id: string) => void,
  * }} props
  */
-export function PreviewSVG({ componentes = [], hoveredId, onHoverComp }) {
-  const netlist = useMemo(() => buildNetlist(componentes), [componentes]);
+export function PreviewSVG({
+  componentes = [],
+  hoveredId,
+  selectedId,
+  onHoverComp,
+  onEditComp,
+}) {
+  const netlist = useMemo(() => toRenderNetlist(componentes), [componentes]);
+  const viewBox = useMemo(() => calcViewBox(netlist), [netlist]);
+  const gndAnchor = useMemo(() => findLowestGndPin(netlist), [netlist]);
+  const netlistKey = useMemo(() => makeNetlistKey(netlist), [netlist]);
 
-  return (
-    <div className="admin-preview">
-      <p className="admin-preview__label">Vista previa del circuito</p>
+  const hoveredComp  = hoveredId  ? netlist.find((c) => c.id === hoveredId)  : null;
+  const selectedComp = selectedId ? netlist.find((c) => c.id === selectedId) : null;
 
-      <div className="admin-preview__canvas">
-        {componentes.length === 0 ? (
+  if (componentes.length === 0) {
+    return (
+      <div className="admin-preview">
+        <p className="admin-preview__label">Vista previa del circuito</p>
+        <div className="admin-preview__canvas">
           <div className="admin-preview__empty">
             <p style={{ fontSize: 13, color: 'var(--text-hint)', textAlign: 'center' }}>
               Agrega componentes para ver la vista previa
             </p>
           </div>
-        ) : (
-          <NetlistRenderer netlist={netlist} preview={false} />
-        )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-preview">
+      <p className="admin-preview__label">Vista previa del circuito</p>
+
+      <div className="admin-preview__canvas admin-canvas">
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={viewBox}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ background: '#16181d', display: 'block', userSelect: 'none' }}
+          onClick={() => onEditComp?.(null)}
+        >
+          {/* Grilla de fondo */}
+          <defs>
+            <pattern
+              id="admin-canvas-grid"
+              width={CANVAS_SCALE * 50}
+              height={CANVAS_SCALE * 50}
+              patternUnits="userSpaceOnUse"
+            >
+              <path
+                d={`M ${CANVAS_SCALE * 50} 0 L 0 0 0 ${CANVAS_SCALE * 50}`}
+                fill="none"
+                stroke="#1e2028"
+                strokeWidth={0.5}
+              />
+            </pattern>
+          </defs>
+          <rect x="-10000" y="-10000" width="20000" height="20000" fill="url(#admin-canvas-grid)" />
+
+          {/* Cables */}
+          <WireLayer netlist={netlist} />
+
+          {/* Tierra */}
+          {gndAnchor && <GndSymbol x={gndAnchor.x} y={gndAnchor.y + 18} />}
+
+          {/* Cuerpos.
+              Le pasamos un key derivado del netlist para forzar el remount
+              de los modelos del simulador cuando cambie cualquier propiedad
+              relevante. Asi useComponentValue recrea su useState con el
+              initialValue actualizado. */}
+          <g pointerEvents="none" key={netlistKey}>
+            {netlist.map((comp) => renderComponent(comp))}
+          </g>
+
+          {/* Etiquetas estandar (ID, pines de transistor/regulador, nodos) */}
+          <g pointerEvents="none">
+            <CompLabels netlist={netlist} />
+            <NodeLabels netlist={netlist} />
+          </g>
+
+          {/* Rings de hover / seleccion */}
+          {hoveredComp && hoveredId !== selectedId && (
+            <FocusRing comp={hoveredComp} variant="hover" />
+          )}
+          {selectedComp && <FocusRing comp={selectedComp} variant="selected" />}
+
+          {/* Hitboxes de click — siempre al final para que reciban los eventos */}
+          {netlist.map((comp) => (
+            <ClickHitbox
+              key={`hit-${comp.id}`}
+              comp={comp}
+              onClick={onEditComp}
+            />
+          ))}
+        </svg>
       </div>
 
-      {componentes.length > 0 && (
-        <p className="admin-preview__hint">
-          {componentes.length} componente{componentes.length !== 1 ? 's' : ''}
-          {hoveredId ? ` · resaltado: ${hoveredId}` : ''}
-        </p>
-      )}
+      <p className="admin-preview__hint">
+        {componentes.length} componente{componentes.length !== 1 ? 's' : ''}
+        {selectedId ? <> · editando: <strong>{selectedId}</strong></>
+          : hoveredId ? <> · resaltado: <strong>{hoveredId}</strong></>
+          : <> · clic en un componente para editarlo</>
+        }
+      </p>
     </div>
   );
-}
-
-function buildNetlist(componentes) {
-  if (!componentes || componentes.length === 0) return [];
-
-  // 1) Recolectar todos los nodos unicos (de cualquier pin de cualquier componente)
-  const nodosSet = new Set();
-  componentes.forEach((c) => {
-    Object.values(c.nodos ?? {}).forEach((n) => {
-      if (n) nodosSet.add(String(n));
-    });
-  });
-
-  const nodos = [...nodosSet].sort((a, b) => {
-    if (a === '0') return 1;
-    if (b === '0') return -1;
-    return a.localeCompare(b, undefined, { numeric: true });
-  });
-
-  // 2) Asignar posicion a cada nodo en una grilla escalonada
-  const cols = Math.max(2, Math.ceil(Math.sqrt(nodos.length + 1)));
-  const SPACING_X = 110, SPACING_Y = 120, ORIGIN_X = 40, ORIGIN_Y = 40;
-
-  const nodoPos = {};
-  nodos.forEach((n, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    nodoPos[n] = {
-      x: ORIGIN_X + col * SPACING_X + (row % 2 ? SPACING_X / 2 : 0),
-      y: ORIGIN_Y + row * SPACING_Y,
-    };
-  });
-
-  // 3) Para cada componente: posicion = centroide de sus pines, y nodos con todos los pines
-  return componentes.map((c) => {
-    const pinKeys = Object.keys(c.nodos ?? {});
-
-    // Posiciones de los nodos a los que se conecta cada pin
-    const pinNodePositions = pinKeys.map((k) => {
-      const nodo = c.nodos[k];
-      return nodo ? (nodoPos[nodo] ?? { x: ORIGIN_X, y: ORIGIN_Y }) : { x: ORIGIN_X, y: ORIGIN_Y };
-    });
-
-    // Centroide para colocar el componente
-    const cx = pinNodePositions.reduce((s, p) => s + p.x, 0) / Math.max(1, pinNodePositions.length);
-    const cy = pinNodePositions.reduce((s, p) => s + p.y, 0) / Math.max(1, pinNodePositions.length);
-
-    // Auto-rotacion (solo aplica a componentes de 2 pines)
-    let rotation = 0;
-    if (pinKeys.length === 2) {
-      const [pA, pB] = pinNodePositions;
-      const dxAbs = Math.abs(pB.x - pA.x);
-      const dyAbs = Math.abs(pB.y - pA.y);
-      const autoRot = (dyAbs > dxAbs * 1.3) ? 90 : 0;
-      rotation = (c.rotation === 0 || c.rotation === 90) ? c.rotation : autoRot;
-    } else {
-      rotation = (c.rotation === 0 || c.rotation === 90) ? c.rotation : 0;
-    }
-
-    // Construir el objeto nodes para NetlistRenderer
-    // - Para 2 pines: se emplea n1/n2 (alias compatibles con todos los models)
-    // - Para 3 pines: se emplea las claves originales
-    const nodes = {};
-    if (pinKeys.length === 2) {
-      const [k1, k2] = pinKeys;
-      nodes.n1 = { nodo: String(c.nodos[k1] ?? ''), x: pinNodePositions[0].x, y: pinNodePositions[0].y };
-      nodes.n2 = { nodo: String(c.nodos[k2] ?? ''), x: pinNodePositions[1].x, y: pinNodePositions[1].y };
-      
-      nodes[k1] = nodes.n1;
-      nodes[k2] = nodes.n2;
-    } else {
-      pinKeys.forEach((k, i) => {
-        nodes[k] = { nodo: String(c.nodos[k] ?? ''), x: pinNodePositions[i].x, y: pinNodePositions[i].y };
-      });
-    }
-
-    return {
-      id:       c.id,
-      type:     c.type,
-      value:    c.value ?? '',
-      position: { x: cx, y: cy },
-      rotation,
-      params:   c.params ?? {},
-      nodes,
-    };
-  });
 }
