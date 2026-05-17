@@ -126,6 +126,9 @@ export function Simulator({ state, dispatch, api }) {
 
             <div className="circuit-svg-wrap" ref={svgContainerRef}>
               <button className="export-btn" onClick={exportToPNG}>↓ Exportar PNG</button>
+              <span className="caption-text">
+                Usa los nombres de los pines que aparecen en el simulador como referencia para entender la conexión lógica. No tomes la disposición gráfica como una guía literal para el armado físico.
+              </span>
               <CircuitEditProvider locked={isActive}>
                 <CircuitSVG
                   circuit={c}

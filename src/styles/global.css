@@ -357,6 +357,7 @@ body {
   position: relative;
   margin-bottom: var(--sp-4);
 }
+
 .export-btn {
   position: absolute;
   top: var(--sp-3);
@@ -373,7 +374,24 @@ body {
   gap: var(--sp-1);
   transition: color 0.15s, background 0.15s;
 }
+
 .export-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+.caption-text {
+  position: absolute;
+  bottom: var(--sp-3);
+  right: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 6px var(--sp-3);
+  font-size: 12px;
+  color: var(--warning);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  transition: color 0.15s, background 0.15s;
+}
 
 .sim-controls { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
 
