@@ -16,6 +16,7 @@ import { Potentiometer }     from '../models/Potentiometer.jsx';
 import { CurrentSource }     from '../models/CurrentSource.jsx';
 import { Bobina }            from '../models/Bobina.jsx';
 import { LED, LED_COLORS }   from '../models/led.jsx';
+import { AnimatedLED }       from '../models/AnimatedLED.jsx';
 import { parseNotation }     from '../models/ComponentValueLabel.jsx';
 
 import { toSVG } from './geometry.js';
@@ -65,11 +66,18 @@ export function FallbackComp({ comp, x, y }) {
 /**
  * Devuelve el JSX correspondiente al componente segun su tipo.
  *
- * @param {object}  comp       Componente normalizado de la netlist
- * @param {boolean} energized  true cuando la simulacion esta activa
+ * @param {object}  comp        Componente normalizado de la netlist
+ * @param {boolean} energized   true cuando la simulacion esta activa
+ * @param {object}  dcResults   Resultados del análisis DC (o null)
+ * @param {object[]} tranResults Snapshots del análisis transitorio (o null).
+ *                              Cuando esta presente y el componente es un LED,
+ *                              el LED se anima en el tiempo recorriendo este
+ *                              array; tiene prioridad sobre dcResults.
+ * @param {number}  tranSpeed   Multiplicador de velocidad para reproducir tranResults.
+ * @param {boolean} tranPaused  Si true, congela la animación transitoria.
  * @returns {JSX.Element}
  */
-export function renderComponent(comp, energized = false, dcResults = null) {
+export function renderComponent(comp, energized = false, dcResults = null, tranResults = null, tranSpeed = 0.05, tranPaused = false) {
   const { x, y }   = toSVG(comp.position);
   const rotation   = comp.rotation ?? 0;
   const valueNum   = parseNotation(comp.value) || 0;
@@ -145,17 +153,53 @@ export function renderComponent(comp, energized = false, dcResults = null) {
       const esLED = (comp.params?.tipo || '').toLowerCase().startsWith('led');
 
       if (esLED) {
-        let ledOn = energized;
+        // Leer los nodos del LED (ánodo = n1, cátodo = n2). comp.nodes[pin] es un
+        // objeto { nodo, x, y } — hay que leer .nodo
+        const nAnodo  = String(comp.nodes?.n1?.nodo ?? comp.nodes?.n1 ?? '');
+        const nCatodo = String(comp.nodes?.n2?.nodo ?? comp.nodes?.n2 ?? '');
+
+        // Voltaje de umbral del LED. Prioridad:
+        //   1. params.caida_tension de la netlist (es lo que el motor BACKEND usa
+        //      en el modelo del diodo, así que es el valor "verdadero").
+        //   2. tabla LED_COLORS por color.
+        // Restamos un pequeño margen (0.05V) porque en simulación el voltaje queda
+        // EXACTAMENTE igual al vf nominal, y un `vDiodo >= vf` estricto a veces
+        // falla por la última cifra decimal (ej. vDiodo=1.76V vs vf=1.8V).
+        const colorKey = (comp.value || 'VERDE').trim().toUpperCase();
+        const colorDef = LED_COLORS.find(c => c.value === colorKey) || LED_COLORS.find(c => c.value === 'VERDE');
+        const caidaTension = Number(comp.params?.caida_tension);
+        const vfNominal = (Number.isFinite(caidaTension) && caidaTension > 0)
+          ? caidaTension
+          : (colorDef?.vf ?? 2.0);
+        const vf = Math.max(0, vfNominal - 0.05);
+
+        // PRIORIDAD: si hay resultados transitorios, animar el LED recorriendo
+        // los snapshots. Esto es lo correcto para circuitos de switching donde
+        // el AC sweep en pequeña señal no captura el on/off del LED.
+        if (energized && Array.isArray(tranResults) && tranResults.length > 0) {
+          return (
+            <AnimatedLED
+              key={comp.id}
+              tranResults={tranResults}
+              nAnodo={nAnodo}
+              nCatodo={nCatodo}
+              vf={vf}
+              speed={tranSpeed}
+              paused={tranPaused}
+              x={x}
+              y={y}
+              scale={SCALE_DEFAULT}
+              rotation={rotation}
+              componentId={comp.id}
+              initialColor={comp.value || 'VERDE'}
+            />
+          );
+        }
+
+        // Fallback: con resultado DC, evaluamos el umbral estáticamente.
+        let ledOn = energized; // fallback adicional: si tampoco hay DC, usar energized
 
         if (energized && dcResults?.voltages) {
-          const colorKey = (comp.value || 'VERDE').trim().toUpperCase();
-          const colorDef = LED_COLORS.find(c => c.value === colorKey) || LED_COLORS.find(c => c.value === 'VERDE');
-          const vf = colorDef?.vf ?? 2.0;
-
-          // Leer los nodos del LED (anodo = n1, catodo = n2).
-          // comp.nodes[pin] es un objeto { nodo, x, y } — hay que leer .nodo
-          const nAnodo  = String(comp.nodes?.n1?.nodo ?? comp.nodes?.n1 ?? '');
-          const nCatodo = String(comp.nodes?.n2?.nodo ?? comp.nodes?.n2 ?? '');
           const vAnodo  = dcResults.voltages[nAnodo]  ?? 0;
           const vCatodo = dcResults.voltages[nCatodo] ?? 0;
           const vDiodo  = vAnodo - vCatodo;
@@ -170,7 +214,13 @@ export function renderComponent(comp, energized = false, dcResults = null) {
           </g>
         );
       }
-      
+      // FIX (rotacion vertical): el `wrapRotation` del padre YA aplica la
+      // rotacion completa al grupo. Si ademas pasamos `orientation='vertical'`,
+      // DiodoRectificador aplicaria una segunda rotacion interna y el cuerpo
+      // del diodo terminaria a 180° respecto a donde geometry.getPins() lo
+      // ubica, haciendo que los cables NO toquen las patitas.
+      // La solucion correcta es dejar el modelo siempre en orientacion
+      // 'horizontal' y que el wrap lo rote a la posicion final.
       return (
         <g key={comp.id} transform={wrapRotation}>
           <DiodoRectificador x={x} y={y} scale={SCALE_DEFAULT} orientation="horizontal"

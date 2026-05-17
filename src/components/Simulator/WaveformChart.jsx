@@ -246,6 +246,185 @@ function ACFaseChart({ acData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 180 }} />;
 }
 
+// Graficas TRANSITORIAS
+//
+// Reciben tranData: array de snapshots con shape
+//   { tiempo: number, voltajes: { nodoId: V }, corrientes: { compId: I | {Ib,Ic,Ie} } }
+// y opcionalmente netlist para identificar nodos especiales (base BJT, colector,
+// anodo/catado de LED) y poner etiquetas didacticas.
+
+/** Tiempo en segundos con sufijo automatico us/ms/s */
+const fmtT = (t) => formatValue(Number(t), 's');
+
+/**
+ * Extrae metadatos utiles de la netlist para que las leyendas tengan nombres
+ * legibles
+ */
+function extraerMetadatos(netlist) {
+  const meta = { nodos: new Map(), corrientes: new Map() };
+  if (!Array.isArray(netlist)) return meta;
+  for (const c of netlist) {
+    if (c.type === 'transistor_bjt' || c.type === 'transistor_fet') {
+      const nB = c.nodes?.nB?.nodo ?? c.nodes?.nB;
+      const nC = c.nodes?.nC?.nodo ?? c.nodes?.nC;
+      const nE = c.nodes?.nE?.nodo ?? c.nodes?.nE;
+      if (nB) meta.nodos.set(String(nB), `base ${c.id}`);
+      if (nC) meta.nodos.set(String(nC), `colector ${c.id}`);
+      if (nE && String(nE) !== '0') meta.nodos.set(String(nE), `emisor ${c.id}`);
+    }
+    if (c.type === 'diodo') {
+      const esLED = (c.params?.tipo || '').toLowerCase().startsWith('led');
+      const tipo = esLED ? 'LED' : 'diodo';
+      const n1 = c.nodes?.n1?.nodo ?? c.nodes?.n1;
+      const n2 = c.nodes?.n2?.nodo ?? c.nodes?.n2;
+      if (n1) meta.nodos.set(String(n1), `ánodo ${c.id}`);
+      if (n2 && String(n2) !== '0') meta.nodos.set(String(n2), `cátodo ${c.id}`);
+      meta.corrientes.set(c.id, `I(${c.id}) — ${tipo}`);
+    }
+    if (c.type === 'fuente_voltaje') {
+      const dcAc = (c.params?.dcOrAc || '').toLowerCase();
+      meta.corrientes.set(c.id, `I(${c.id}) — fuente ${dcAc.toUpperCase()}`);
+    }
+  }
+  return meta;
+}
+
+/** Saca el valor real de una corriente, que puede ser numero o {Ib,Ic,Ie} para BJT */
+function corrienteEscalar(i, preferencia = 'Ic') {
+  if (i == null) return 0;
+  if (typeof i === 'number') return i;
+  if (typeof i === 'object') {
+    if (preferencia in i) return Number(i[preferencia]) || 0;
+    return Number(i.Ic ?? i.Ib ?? i.Ie ?? 0) || 0;
+  }
+  return Number(i) || 0;
+}
+
+/**
+ * Grafica de voltajes vs tiempo 
+ * Por defecto muestra todos los nodos excepto GND.
+ */
+function TRANVoltageChart({ tranData, meta }) {
+  const ref = useRef(null);
+  // Tomar la lista de nodos del primer snapshot (excluyendo GND)
+  const nodos = Object.keys(tranData[0]?.voltajes ?? {}).filter(n => n !== '0').sort();
+  const labels = tranData.map(s => s.tiempo);
+
+  useChart(ref, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: nodos.map((nodo, idx) => ({
+        label: meta.nodos.has(nodo) ? `V(${nodo}) — ${meta.nodos.get(nodo)}` : `V(${nodo})`,
+        data: tranData.map(s => {
+          const v = s.voltajes?.[nodo];
+          if (typeof v === 'number') return v;
+          if (v && typeof v === 'object' && 're' in v) return v.re;
+          return 0;
+        }),
+        borderColor: PALETTE[idx % PALETTE.length],
+        backgroundColor: PALETTE[idx % PALETTE.length] + '20',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.1,
+      })),
+    },
+    options: {
+      ...BASE_OPTIONS,
+      plugins: {
+        ...BASE_OPTIONS.plugins,
+        tooltip: {
+          ...BASE_OPTIONS.plugins.tooltip,
+          callbacks: {
+            title: (items) => `t = ${fmtT(labels[items[0].dataIndex])}`,
+            label: (ctx) => `${ctx.dataset.label} = ${fmtV(ctx.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ...BASE_SCALES.x,
+          title: { display: true, text: 'Tiempo (s)', color: '#5a6278', font: { size: 10 } },
+          ticks: {
+            ...BASE_SCALES.x.ticks,
+            callback: function (val) { return fmtT(this.getLabelForValue(val)); },
+          },
+        },
+        y: {
+          ...BASE_SCALES.y,
+          title: { display: true, text: 'Voltaje (V)', color: '#5a6278', font: { size: 10 } },
+          ticks: {
+            ...BASE_SCALES.y.ticks,
+            callback: (v) => fmtV(v),
+          },
+        },
+      },
+    },
+  }, [tranData]);
+
+  return <canvas ref={ref} style={{ width: '100%', height: 220 }} />;
+}
+
+/** Grafica de corrientes vs tiempo (tipo osciloscopio) */
+function TRANCurrentChart({ tranData, meta }) {
+  const ref = useRef(null);
+  // Filtramos componentes cuya corriente es aproximadamente 0 todo el tiempo (no aporta)
+  const compsRelevantes = Object.keys(tranData[0]?.corrientes ?? {}).filter(id => {
+    return tranData.some(s => Math.abs(corrienteEscalar(s.corrientes?.[id])) > 1e-9);
+  }).sort();
+
+  const labels = tranData.map(s => s.tiempo);
+
+  useChart(ref, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: compsRelevantes.map((id, idx) => ({
+        label: meta.corrientes.get(id) ?? `I(${id})`,
+        data: tranData.map(s => corrienteEscalar(s.corrientes?.[id])),
+        borderColor: PALETTE[idx % PALETTE.length],
+        backgroundColor: PALETTE[idx % PALETTE.length] + '20',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.1,
+      })),
+    },
+    options: {
+      ...BASE_OPTIONS,
+      plugins: {
+        ...BASE_OPTIONS.plugins,
+        tooltip: {
+          ...BASE_OPTIONS.plugins.tooltip,
+          callbacks: {
+            title: (items) => `t = ${fmtT(labels[items[0].dataIndex])}`,
+            label: (ctx) => `${ctx.dataset.label} = ${fmtA(ctx.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ...BASE_SCALES.x,
+          title: { display: true, text: 'Tiempo (s)', color: '#5a6278', font: { size: 10 } },
+          ticks: {
+            ...BASE_SCALES.x.ticks,
+            callback: function (val) { return fmtT(this.getLabelForValue(val)); },
+          },
+        },
+        y: {
+          ...BASE_SCALES.y,
+          title: { display: true, text: 'Corriente (A)', color: '#5a6278', font: { size: 10 } },
+          ticks: {
+            ...BASE_SCALES.y.ticks,
+            callback: (v) => fmtA(v),
+          },
+        },
+      },
+    },
+  }, [tranData]);
+
+  return <canvas ref={ref} style={{ width: '100%', height: 200 }} />;
+}
+
 // SubTabPill
 
 function SubTabPill({ active, onClick, children }) {
@@ -266,28 +445,50 @@ function SubTabPill({ active, onClick, children }) {
 // WaveformChart
 
 /**
- * WaveformChart — Grafica de formas de onda.
+ * WaveformChart — Graficas de formas de onda.
  *
  * Modos (en orden de prioridad):
- *  1. acData  -> Bode magnitud + fase (lineas, Chart.js).
- *               acData debe llegar ya transformado por SimulacionService: 
- *               Array de { frecuencia, voltages: { nodo: { magnitud, fase } } }
- *  2. dcData  -> Voltajes nodales + corrientes de rama (lineas de puntos, Chart.js)
- *  3. Animacion sintetica con Canvas API
+ *  1. tranData -> V(t) e I(t) tipo osciloscopio (Micro-Cap style).
+ *                 Array de { tiempo, voltajes, corrientes }.
+ *                 Es lo que el usuario realmente quiere ver para circuitos
+ *                 de switching (BJT + LED + AC).
+ *  2. acData   -> Bode magnitud + fase. Sirve para filtros lineales (RC/RL/RLC).
+ *                 Array ya transformado: { frecuencia, voltages, currents }.
+ *  3. dcData   -> Voltajes nodales y corrientes de rama (graficas estáticas).
+ *  4. Mensaje vacío.
  *
- * @param {{ circuit, isActive, acData, dcData }} props
+ * @param {{
+ *   circuit: object,
+ *   isActive: boolean,
+ *   acData: Array,
+ *   dcData: object,
+ *   tranData: Array,
+ *   netlist: Array
+ * }} props
  */
-export function WaveformChart({ circuit, isActive, acData, dcData }) {
+export function WaveformChart({ circuit, isActive, acData, dcData, tranData, netlist }) {
   const [acSubTab, setAcSubTab] = useState('magnitud');
+  const [tranSubTab, setTranSubTab] = useState('voltaje');
 
-  const hasAC = Array.isArray(acData) && acData.length > 0;
-  const hasDC = dcData && Object.keys(dcData.voltages ?? {}).filter(k => k !== '0').length > 0;
+  const hasTRAN = Array.isArray(tranData) && tranData.length > 0;
+  const hasAC   = Array.isArray(acData) && acData.length > 0;
+  const hasDC   = dcData && Object.keys(dcData.voltages ?? {}).filter(k => k !== '0').length > 0;
 
-  const hint = hasAC
-    ? `AC — ${acData.length} puntos · ${formatHz(acData[0]?.frecuencia)} → ${formatHz(acData[acData.length-1]?.frecuencia)}`
-    : hasDC
-      ? 'DC — voltajes nodales y corrientes de rama'
-      : 'Ejecuta Simular DC o ∿ Simular AC para ver las gráficas.';
+  // Metadatos para etiquetas didacticas en las leyendas
+  const tranMeta = hasTRAN ? extraerMetadatos(netlist) : { nodos: new Map(), corrientes: new Map() };
+
+  let hint;
+  if (hasTRAN) {
+    const tMin = tranData[0]?.tiempo ?? 0;
+    const tMax = tranData[tranData.length - 1]?.tiempo ?? 0;
+    hint = `Transitorio — ${tranData.length} muestras · ${fmtT(tMin)} → ${fmtT(tMax)}`;
+  } else if (hasAC) {
+    hint = `AC — ${acData.length} puntos · ${formatHz(acData[0]?.frecuencia)} → ${formatHz(acData[acData.length-1]?.frecuencia)}`;
+  } else if (hasDC) {
+    hint = 'DC — voltajes nodales y corrientes de rama';
+  } else {
+    hint = 'Ejecuta Simular DC, ∿ Simular AC o ⏱ Simular Transitorio para ver las gráficas.';
+  }
 
   const wrap = (children) => (
     <div style={{ background: '#16181d', borderRadius: 8, padding: '12px 8px' }}>{children}</div>
@@ -297,7 +498,21 @@ export function WaveformChart({ circuit, isActive, acData, dcData }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <p className="chart-hint">{hint}</p>
 
-      {hasAC && (
+      {hasTRAN && (
+        <>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <SubTabPill active={tranSubTab === 'voltaje'}   onClick={() => setTranSubTab('voltaje')}>Voltajes V(t)</SubTabPill>
+            <SubTabPill active={tranSubTab === 'corriente'} onClick={() => setTranSubTab('corriente')}>Corrientes I(t)</SubTabPill>
+          </div>
+          {wrap(
+            tranSubTab === 'voltaje'
+              ? <TRANVoltageChart tranData={tranData} meta={tranMeta} />
+              : <TRANCurrentChart tranData={tranData} meta={tranMeta} />
+          )}
+        </>
+      )}
+
+      {!hasTRAN && hasAC && (
         <>
           <div style={{ display: 'flex', gap: 6 }}>
             <SubTabPill active={acSubTab === 'magnitud'} onClick={() => setAcSubTab('magnitud')}>Magnitud</SubTabPill>
@@ -307,14 +522,14 @@ export function WaveformChart({ circuit, isActive, acData, dcData }) {
         </>
       )}
 
-      {!hasAC && hasDC && (
+      {!hasTRAN && !hasAC && hasDC && (
         <>
           {wrap(<DCVoltageChart dcData={dcData} />)}
           {wrap(<DCCurrentChart dcData={dcData} />)}
         </>
       )}
 
-      {!hasAC && !hasDC && (
+      {!hasTRAN && !hasAC && !hasDC && (
         <div style={{
           background: '#1e1e2e',
           borderRadius: 8,
@@ -325,7 +540,7 @@ export function WaveformChart({ circuit, isActive, acData, dcData }) {
           fontFamily: 'monospace',
         }}>
           No hay datos de simulación aún.<br />
-          Presiona <strong>Simular DC</strong> o <strong>∿ Simular AC</strong> para generar las gráficas.
+          Presiona <strong>Simular DC</strong>, <strong>∿ Simular AC</strong> o <strong>⏱ Simular Transitorio</strong> para generar las gráficas.
         </div>
       )}
     </div>

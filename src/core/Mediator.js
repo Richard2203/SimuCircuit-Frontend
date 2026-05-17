@@ -30,8 +30,10 @@ const INITIAL_STATE = {
   simTime: 0,
   simResultadoDC: null,
   simResultadoAC: null,
-  procedimientoDC: null, 
-  procedimientoAC: null, 
+  simResultadoTRAN: null, // array de snapshots {tiempo, voltajes, corrientes}
+  procedimientoDC: null,  // pasos de calculo del ProcedureManager DC (circuitos 1-15)
+  procedimientoAC: null,  // pasos de calculo del ProcedureManager AC (circuitos 10-15)
+  procedimientoTRAN: null,  // pasos de calculo del ProcedureManager para transitorio
   simError: null,
   filtrosApi: null,
   /** @type {Circuit[]} */
@@ -64,16 +66,39 @@ class SimuCircuitMediator {
     this._timer = null;
 
     // Escuchar cambios de valor editados directamente en el SVG
-    eventBus.subscribe('COMPONENT_VALUE_CHANGED', ({ id, value }) => {
+    eventBus.subscribe('COMPONENT_VALUE_CHANGED', ({ id, value, wiper }) => {
       const netlist = this._state.netlist;
       if (!Array.isArray(netlist)) return;
       const idx = netlist.findIndex((c) => (c?.id ?? c?.componentId) === id);
       if (idx === -1) return;
       const comp = netlist[idx];
-      // Actualizar value tanto en objeto plano como en instancia de Component
-      const updated = typeof comp?.clone === 'function'
-        ? comp.withValue(String(value))
-        : { ...comp, value: String(value) };
+
+      const isVariable = (comp?.type ?? '') === 'resistencia_variable';
+
+      let updated;
+      if (isVariable) {
+        const base = typeof comp?.clone === 'function' ? comp.toBackendJSON?.() ?? { ...comp } : { ...comp };
+        const params = { ...(base.params ?? {}) };
+        // Actualizar solo wiper; eliminar cursor_pos legado si existe
+        if (typeof wiper === 'number') {
+          params.wiper = wiper;
+          delete params.cursor_pos;
+        }
+        // Solo actualizar value si viene explicitamente (edicion del label)
+        const newValue = typeof value !== 'undefined' ? String(value) : base.value;
+        updated = typeof comp?.clone === 'function'
+          ? comp.withValue(newValue)
+          : { ...comp, value: newValue, params };
+        // withValue no toca params; parcheamos params aparte si es instancia
+        if (typeof comp?.clone === 'function') {
+          updated = { ...updated, params };
+        }
+      } else {
+        updated = typeof comp?.clone === 'function'
+          ? comp.withValue(String(value))
+          : { ...comp, value: String(value) };
+      }
+
       const newNetlist = [...netlist];
       newNetlist[idx] = updated;
       this._state.netlist = newNetlist;
@@ -107,8 +132,10 @@ class SimuCircuitMediator {
           simTime: 0,
           simResultadoDC: null,
           simResultadoAC: null,
+          simResultadoTRAN: null,
           procedimientoDC: null,
           procedimientoAC: null,
+          procedimientoTRAN: null,
           simError: null,
           teoremaResultado: null,
           openAccordions: {},
@@ -127,8 +154,10 @@ class SimuCircuitMediator {
           simTime: 0,
           simResultadoDC: null,
           simResultadoAC: null,
+          simResultadoTRAN: null,
           procedimientoDC: null,
           procedimientoAC: null,
+          procedimientoTRAN: null,
           simError: null,
           teoremaResultado: null,
         };
@@ -156,8 +185,10 @@ class SimuCircuitMediator {
           simTime: 0,
           simResultadoDC: null,
           simResultadoAC: null,
+          simResultadoTRAN: null,
           procedimientoDC: null,
           procedimientoAC: null,
+          procedimientoTRAN: null,
           simError: null,
         };
         break;
@@ -252,8 +283,10 @@ class SimuCircuitMediator {
         simTime:         0,
         simResultadoDC:  null,
         simResultadoAC:  null,
+        simResultadoTRAN: null,
         procedimientoDC: null,
         procedimientoAC: null,
+        procedimientoTRAN: null,
         simError:        null,
         teoremaResultado: null,
         openAccordions:  {},
@@ -295,6 +328,7 @@ class SimuCircuitMediator {
   async simularDC(opciones = {}) {
     const netlistJSON = this._netlistParaBackend(opciones.netlist ?? this._state.netlist);
     const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
+    
     const id = this._state.selectedCircuit?.id ?? opciones.id;
 
     this._bus.publish('simulacion:iniciada', { tipo: 'DC', netlist: netlistJSON });
@@ -322,6 +356,7 @@ class SimuCircuitMediator {
   async simularAC(opciones = {}) {
     const netlistJSON = this._netlistParaBackend(opciones.netlist ?? this._state.netlist);
     const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
+    
     const id = this._state.selectedCircuit?.id ?? opciones.id;
 
     this._bus.publish('simulacion:iniciada', { tipo: 'AC', netlist: netlistJSON });
@@ -344,6 +379,38 @@ class SimuCircuitMediator {
       console.error('[Mediator] Error en simulación AC:', err);
     } finally {
       this._setLoading('simulacionAC', false);
+    }
+    this._bus.publish('STATE_CHANGED', this.getState());
+  }
+
+  /**
+   * Ejecuta la simulacion transitoria (dominio del tiempo).
+   */
+  async simularTransitorio(opciones = {}) {
+    const netlistJSON = this._netlistParaBackend(opciones.netlist ?? this._state.netlist);
+    const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
+    const id = this._state.selectedCircuit?.id ?? opciones.id;
+
+    this._bus.publish('simulacion:iniciada', { tipo: 'TRAN', netlist: netlistJSON });
+    this._setLoading('simulacionTRAN', true);
+    this._state.simError = null;
+
+    try {
+      const { resultado, procedimiento } = await SimulacionService.simularTransitorio({
+        netlist: netlistJSON,
+        configuracion_transitorio: opciones.configuracion_transitorio,
+        nombre_circuito,
+        id,
+      });
+      this._state.simResultadoTRAN = resultado;
+      this._state.procedimientoTRAN = procedimiento;
+      this._bus.publish('simulacion:completada', { tipo: 'TRAN', resultado });
+    } catch (err) {
+      this._state.simError = err.message;
+      this._bus.publish('simulacion:error', { tipo: 'TRAN', error: err.message });
+      console.error('[Mediator] Error en simulación Transitoria:', err);
+    } finally {
+      this._setLoading('simulacionTRAN', false);
     }
     this._bus.publish('STATE_CHANGED', this.getState());
   }
@@ -545,7 +612,7 @@ class SimuCircuitMediator {
     this._bus.publish('STATE_CHANGED', this.getState());
   }
 
-  // Helpers privados 
+  // Helpers privados
 
   /**
    * Convierte la netlist de instancias Component al formato plano que espera el backend.
@@ -571,11 +638,12 @@ class SimuCircuitMediator {
         type:     raw.type,
         value:    raw.value,
         nodes,
-        
+        // Asegurar que potenciometros siempre tengan params.wiper (0-1) y sin cursor_pos.
         ...(() => {
           const p = { ...(raw.params ?? {}) };
-          if (raw.type === 'potenciometro' && typeof p.wiper !== 'number') {
-            p.wiper = typeof p.cursor_pos === 'number' ? p.cursor_pos / 100 : 0.5;
+          if (raw.type === 'resistencia_variable') {
+            if (typeof p.wiper !== 'number') p.wiper = 0.5;
+            delete p.cursor_pos;
           }
           return { params: p };
         })(),

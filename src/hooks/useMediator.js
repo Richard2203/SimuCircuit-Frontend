@@ -47,6 +47,7 @@ export function useMediator() {
   const cargarComponentes      = useCallback(()   => mediator.cargarComponentes(),                        []);
   const simularDC              = useCallback((p)  => mediator.simularDC(p),                               []);
   const simularAC              = useCallback((p)  => mediator.simularAC(p),                               []);
+  const simularTransitorio     = useCallback((p)  => mediator.simularTransitorio(p),                      []);
   const calcularTheveninNorton       = useCallback((p)  => mediator.calcularTheveninNorton(p),                  []);
   const calcularSuperposicion        = useCallback((p)  => mediator.calcularSuperposicion(p),                   []);
   const calcularTransformacionFuente = useCallback((p)  => mediator.calcularTransformacionFuente(p),            []);
@@ -63,6 +64,7 @@ export function useMediator() {
     cargarComponentes,
     simularDC,
     simularAC,
+    simularTransitorio,
     calcularTheveninNorton,
     calcularSuperposicion,
     calcularTransformacionFuente,
@@ -78,6 +80,7 @@ export function useMediator() {
     cargarComponentes,
     simularDC,
     simularAC,
+    simularTransitorio,
     calcularTheveninNorton,
     calcularSuperposicion,
     calcularTransformacionFuente,

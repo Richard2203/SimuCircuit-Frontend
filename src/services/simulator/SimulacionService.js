@@ -3,6 +3,7 @@
  * Cubre los endpoints:
  *   POST /api/simular/dc
  *   POST /api/simular/ac
+ *   POST /api/analisis/transitorio
  */
 
 import { apiClient } from './apiClient';
@@ -54,7 +55,7 @@ async function simularDC({ netlist, nombre_circuito, id } = {}) {
   validarNetlist(netlist);
   
   const res = await apiClient.post('/api/simular/dc', { nombre_circuito, netlist, id });
-  console.log('Respuesta DC:', JSON.stringify(res, null, 2 ));
+  
   return {
     resultado: res.data ?? res,
     procedimiento: res.procedimiento ?? null,
@@ -63,7 +64,9 @@ async function simularDC({ netlist, nombre_circuito, id } = {}) {
 
 /**
  * Simula AC con barrido de frecuencia.
- * 
+ * Body: { configuracion_ac: { f_inicial, f_final, puntos, barrido }, nombre_circuito, netlist, id }
+ * barrido: "lineal" | "log" | "decada" | "octava"
+ *
  * Devuelve { resultado, procedimiento }:
  *   resultado    -> array transformado [{ frecuencia, voltages, currents }] que consume WaveformChart
  *   procedimiento -> pasos del ProcedureManager (mismo shape que DC) o null si el circuito no tiene plantilla
@@ -72,12 +75,16 @@ async function simularAC({ netlist, configuracion_ac, nombre_circuito, id } = {}
   validarNetlist(netlist);
 
   if (!configuracion_ac) throw new Error('Se requiere configuracion_ac.');
+  
   const { f_inicial, f_final, puntos, barrido } = configuracion_ac;
+
   if (f_inicial == null || f_final == null || puntos == null || !barrido)
     throw new Error('configuracion_ac requiere f_inicial, f_final, puntos y barrido.');
+
   if (!BARRIDOS_VALIDOS.includes(barrido))
     throw new Error(`barrido debe ser uno de: ${BARRIDOS_VALIDOS.join(', ')}.`);
 
+  // apiClient retorna el body directamente, asi que res = { exito, tipo_analisis, data, procedimiento }
   const res = await apiClient.post('/api/simular/ac', {
     configuracion_ac,
     nombre_circuito,
@@ -87,8 +94,8 @@ async function simularAC({ netlist, configuracion_ac, nombre_circuito, id } = {}
 
   const data = res.data ?? res;
   let resultado;
-  if (Array.isArray(data))           resultado = data;             
-  else if (data?.frequencySweep)     resultado = transformarAC(data);
+  if (Array.isArray(data))           resultado = data;             // ya transformado
+  else if (data?.frequencySweep)     resultado = transformarAC(data); // formato crudo
   else                               resultado = [];
 
   return {
@@ -97,4 +104,50 @@ async function simularAC({ netlist, configuracion_ac, nombre_circuito, id } = {}
   };
 }
 
-export const SimulacionService = { simularDC, simularAC };
+/**
+ * Simula transitorio (dominio del tiempo).
+ * Body: { configuracion_transitorio: { t_stop, delta_t }, nombre_circuito, netlist, id }
+ *
+ * El backend devuelve un array de snapshots:
+ *   [{ tiempo, voltajes: { nodo: V }, corrientes: { compId: I } }, ...]
+ * 
+ * Devuelve { resultado, procedimiento }:
+ *   resultado    -> array de snapshots tal cual viene del backend
+ *   procedimiento -> pasos del ProcedureManager o null
+ */
+async function simularTransitorio({ netlist, configuracion_transitorio, nombre_circuito, id } = {}) {
+  validarNetlist(netlist);
+
+  if (!configuracion_transitorio) throw new Error('Se requiere configuracion_transitorio.');
+  const { t_stop, delta_t } = configuracion_transitorio;
+
+  if (t_stop == null || delta_t == null)
+    throw new Error('configuracion_transitorio requiere t_stop y delta_t (en segundos).');
+
+  if (Number(t_stop) <= 0 || Number(delta_t) <= 0)
+    throw new Error('t_stop y delta_t deben ser positivos.');
+
+  if (Number(delta_t) >= Number(t_stop))
+    throw new Error('delta_t debe ser menor que t_stop.');
+
+  // Tope defensivo en el cliente: el servidor tambien lo valida pero asi avisamos
+  // antes de hacer el round-trip.
+  const totalSamples = Math.ceil(Number(t_stop) / Number(delta_t));
+  if (totalSamples > 200000) {
+    throw new Error(`Demasiados pasos (${totalSamples}). Aumenta delta_t o reduce t_stop.`);
+  }
+
+  const res = await apiClient.post('/api/analisis/transitorio', {
+    configuracion_transitorio,
+    nombre_circuito,
+    netlist,
+    id,
+  });
+
+  return {
+    resultado: res.data ?? res,
+    procedimiento: res.procedimiento ?? null,
+  };
+}
+
+export const SimulacionService = { simularDC, simularAC, simularTransitorio };

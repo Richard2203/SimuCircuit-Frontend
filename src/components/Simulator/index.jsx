@@ -12,8 +12,6 @@ import { CircuitEditProvider } from '../../core/CircuitEditContext';
 import { formatValue }        from './models/ComponentValueLabel.jsx';
 
 /* Helpers de formato: notacion de ingenieria
- * Delegamos en formatValue (mismo formateador del canvas SVG) para
- * consistencia total en toda la app.
  */
 const fmtV    = (v)         => formatValue(Number(v), 'V');
 const fmtA    = (v)         => formatValue(Number(v), 'A');
@@ -32,6 +30,7 @@ export function Simulator({ state, dispatch, api }) {
     activeTab,
     simResultadoDC,
     simResultadoAC,
+    simResultadoTRAN,
     simError,
     loading,
     netlist,
@@ -40,10 +39,15 @@ export function Simulator({ state, dispatch, api }) {
     analisisError,
     procedimientoDC,
     procedimientoAC,
+    procedimientoTRAN,
   } = state;
 
   const svgContainerRef = useRef(null);
   const simTime = useSimTime();
+
+  // Estado local de la animacion transitoria.
+  const [tranSpeed, setTranSpeed] = useState(0.05);
+  const [tranPaused, setTranPaused] = useState(false);
 
   if (!selectedCircuit) return null;
 
@@ -79,10 +83,21 @@ export function Simulator({ state, dispatch, api }) {
 
   const isRunningDC = loading?.simulacionDC;
   const isRunningAC = loading?.simulacionAC;
+  const isRunningTRAN = loading?.simulacionTRAN;
 
-  // Botones AC/DC visibles segun las fuentes presentes en la netlist
-  const mostrarDC = c.tieneDC;
-  const mostrarAC = c.tieneAC;
+  // Deteccion de dispositivos no lineales: BJT (Q), FET (J), diodos/LED (D),
+  // reguladores (U). 
+  const _cc = c.componentCounts;
+  const _hayNoLineales = _cc.D > 0 || _cc.Q > 0 || _cc.J > 0 || _cc.U > 0;
+
+  // Botones visibles segun las fuentes y los componentes presentes en la netlist:
+  //   - DC siempre que haya fuente DC: punto de operación estable, válido siempre.
+  //   - AC solo en circuitos lineales (RC/RL/RLC). 
+  //   - TRAN cuando hay AC + no lineales (BJT/FET como interruptor, rectificadores,
+  //     LED controlado, etc): analisis correcto para gran señal y switching.
+  const mostrarDC   = c.tieneDC;
+  const mostrarAC   = c.tieneAC && !_hayNoLineales;
+  const mostrarTRAN = c.tieneAC &&  _hayNoLineales;
 
   return (
     <div className="page-container">
@@ -112,7 +127,14 @@ export function Simulator({ state, dispatch, api }) {
             <div className="circuit-svg-wrap" ref={svgContainerRef}>
               <button className="export-btn" onClick={exportToPNG}>↓ Exportar PNG</button>
               <CircuitEditProvider locked={isActive}>
-                <CircuitSVG circuit={c} energized={isActive} dcResults={simResultadoDC} />
+                <CircuitSVG
+                  circuit={c}
+                  energized={isActive}
+                  dcResults={simResultadoDC}
+                  tranResults={simResultadoTRAN}
+                  tranSpeed={tranSpeed}
+                  tranPaused={tranPaused}
+                />
               </CircuitEditProvider>
             </div>
 
@@ -138,7 +160,7 @@ export function Simulator({ state, dispatch, api }) {
             </div>
 
             {/* Controles de simulacion via API */}
-            {netlist.length > 0 && (mostrarDC || mostrarAC) && (
+            {netlist.length > 0 && (mostrarDC || mostrarAC || mostrarTRAN) && (
               <div style={{ marginTop: 8 }}>
                 <div className="sim-controls">
                   {mostrarDC && (
@@ -146,12 +168,16 @@ export function Simulator({ state, dispatch, api }) {
                       className="control-btn primary"
                       onClick={() => api.simularDC()}
                       disabled={!isActive || isRunningDC}
+                      title="Análisis DC: calcula el punto de operación del circuito en régimen estable (fuentes constantes). Capacitores → circuito abierto, bobinas → cortocircuito. Devuelve un único valor de voltaje y corriente por nodo/componente."
                     >
                       {isRunningDC ? '⏳ Simulando…' : '⚡ Simular DC'}
                     </button>
                   )}
                   {mostrarAC && (
                     <ACSimularBtn isActive={isActive} isRunning={isRunningAC} onSimular={api.simularAC} />
+                  )}
+                  {mostrarTRAN && (
+                    <TRANSimularBtn isActive={isActive} isRunning={isRunningTRAN} onSimular={api.simularTransitorio} />
                   )}
                 </div>
                 {!isActive && (
@@ -160,6 +186,17 @@ export function Simulator({ state, dispatch, api }) {
                   </p>
                 )}
               </div>
+            )}
+
+            {/* Slider de velocidad de la animacion transitoria.*/}
+            {simResultadoTRAN && Array.isArray(simResultadoTRAN) && simResultadoTRAN.length > 0 && (
+              <TRANControlPanel
+                tranResults={simResultadoTRAN}
+                speed={tranSpeed}
+                onSpeedChange={setTranSpeed}
+                paused={tranPaused}
+                onTogglePause={() => setTranPaused(p => !p)}
+              />
             )}
 
             {simError && (
@@ -178,6 +215,9 @@ export function Simulator({ state, dispatch, api }) {
               </div>
             )}
           </div>
+
+          {/* Panel de estado del simulador (contexto + estado + componentes). */}
+          <SimulatorSidebar circuit={c} simStatus={simStatus} simTime={simTime} netlist={netlist} />
 
           {/* Descripcion + metricas + analisis */}
           <div className="sim-panel p-5">
@@ -246,6 +286,71 @@ export function Simulator({ state, dispatch, api }) {
               </div>
             )}
 
+            {simResultadoTRAN && Array.isArray(simResultadoTRAN) && simResultadoTRAN.length > 0 && (
+              <div
+                style={{
+                  margin: '12px 0',
+                  padding: '10px 14px',
+                  background: '#1e2613',
+                  border: '1px solid #5fb338',
+                  borderRadius: 6,
+                }}
+              >
+                <p style={{ color: '#7fcc4b', fontWeight: 600, marginBottom: 4 }}>
+                  Resultado Transitorio — {simResultadoTRAN.length} snapshots
+                </p>
+                <p style={{ fontSize: 12, color: '#aaa', marginBottom: 6 }}>
+                  t = {formatValue(simResultadoTRAN[0]?.tiempo, 's')} →{' '}
+                  t = {formatValue(simResultadoTRAN[simResultadoTRAN.length - 1]?.tiempo, 's')}
+                  {' · '}Δt = {formatValue(
+                    (simResultadoTRAN[1]?.tiempo - simResultadoTRAN[0]?.tiempo) || 0,
+                    's'
+                  )}
+                </p>
+               
+                {(() => {
+                  const findSnapshotPico = () => {
+                    let mejorIdx = Math.floor(simResultadoTRAN.length / 2);
+                    let mejorMag = -1;
+                    for (let i = 0; i < simResultadoTRAN.length; i++) {
+                      const corrs = simResultadoTRAN[i]?.corrientes ?? {};
+                      let magMax = 0;
+                      for (const v of Object.values(corrs)) {
+                        let val;
+                        if (typeof v === 'number') val = Math.abs(v);
+                        else if (v && typeof v === 'object') val = Math.abs(Number(v.Ic ?? v.Ib ?? v.Ie ?? 0));
+                        else val = 0;
+                        if (val > magMax) magMax = val;
+                      }
+                      if (magMax > mejorMag) { mejorMag = magMax; mejorIdx = i; }
+                    }
+                    return mejorIdx;
+                  };
+                  const idx = findSnapshotPico();
+                  const snap = simResultadoTRAN[idx];
+                  if (!snap?.voltajes) return null;
+                  const nodos = Object.keys(snap.voltajes).filter(n => n !== '0').sort();
+                  return (
+                    <details>
+                      <summary style={{ fontSize: 11, color: '#888', cursor: 'pointer' }}>
+                        Snapshot en el pico de actividad (t = {formatValue(snap.tiempo, 's')})
+                      </summary>
+                      <div style={{ marginTop: 6, fontSize: 11, fontFamily: 'monospace', color: '#bbb' }}>
+                        {nodos.map(n => (
+                          <span key={n} style={{ display: 'inline-block', marginRight: 12 }}>
+                            V({n}) = {formatValue(Number(snap.voltajes[n]) || 0, 'V')}
+                          </span>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: 4, fontSize: 10, color: '#666', fontStyle: 'italic' }}>
+                        Para ver toda la evolución temporal, abrí la pestaña 📊 Gráficas.
+                      </div>
+                    </details>
+                  );
+                })()}
+              </div>
+            )}
+
             <div className="tabs-row">
               {[
                 { id: 'calcs',    label: '⊞ Cálculos' },
@@ -262,7 +367,14 @@ export function Simulator({ state, dispatch, api }) {
             </div>
 
             {activeTab === 'graficas' ? (
-              <WaveformChart circuit={c} isActive={isActive} acData={simResultadoAC} dcData={simResultadoDC} />
+              <WaveformChart
+                circuit={c}
+                isActive={isActive}
+                acData={simResultadoAC}
+                dcData={simResultadoDC}
+                tranData={simResultadoTRAN}
+                netlist={netlist}
+              />
             ) : (
               <AccordionsCondicionales
                 c={c} state={state} dispatch={dispatch} api={api}
@@ -272,6 +384,7 @@ export function Simulator({ state, dispatch, api }) {
                 simResultadoDC={simResultadoDC}
                 procedimientoDC={procedimientoDC}
                 procedimientoAC={procedimientoAC}
+                procedimientoTRAN={procedimientoTRAN}
                 loading={loading}
                 simError={simError}
                 analisisError={analisisError}
@@ -280,7 +393,6 @@ export function Simulator({ state, dispatch, api }) {
           </div>
         </div>
 
-        <SimulatorSidebar circuit={c} simStatus={simStatus} simTime={simTime} netlist={netlist} />
       </div>
     </div>
   );
@@ -302,7 +414,8 @@ export function Simulator({ state, dispatch, api }) {
 function AccordionsCondicionales({
   c, state, dispatch, api,
   netlist, analisisResultado, teoremaResultado,
-  simResultadoDC, procedimientoDC, procedimientoAC, loading, simError, analisisError,
+  simResultadoDC, procedimientoDC, procedimientoAC, procedimientoTRAN,
+  loading, simError, analisisError,
 }) {
   const cc = c.componentCounts; // { R, C, L, F, D, Q, J, U }
 
@@ -321,9 +434,9 @@ function AccordionsCondicionales({
   // Flags de visibilidad por accordion
   const mostrarNodal       = c.tieneDC;
   const mostrarTransitorio = c.tieneDC && (cc.C > 0 || cc.L > 0);
-  // Req es un escalar real: solo aplica si no hay reactivos, o hay regimen DC
-  // en estado estable (C abierto, L corto). En AC puro con C o L lo correcto es Zeq(w),
-  // no R_eq.
+  // Req es un escalar real: solo aplica si (a) no hay reactivos, o (b) hay regimen DC
+  // en estado estable (C abierto, L corto). En AC puro con C o L lo correcto es Zeq(ω),
+  // no R_eq
   const mostrarGeneral     = cc.R > 0 && (c.tieneDC || (cc.C === 0 && cc.L === 0));
   const mostrarLeyes       = true; // KVL/KCL siempre; divisores condicionados internamente
   const mostrarThevenin    = c.tieneDC && cc.R >= 2 && !tieneNoLineales;
@@ -414,13 +527,10 @@ function AccordionsCondicionales({
         />
       )}
 
-      {procedimientoDC && A('procedimiento-dc', 'Procedimiento de Cálculo DC', '📐',
-        <ProcedimientoPanel procedimiento={procedimientoDC} />
+      {(procedimientoDC || procedimientoAC || procedimientoTRAN) && A('procedimiento', 'Procedimiento de Cálculos', '📋',
+        <ProcedimientoPanel procedimiento={procedimientoDC || procedimientoAC || procedimientoTRAN} />
       )}
 
-      {procedimientoAC && A('procedimiento-ac', 'Procedimiento de Cálculo AC', '〰️',
-        <ProcedimientoPanel procedimiento={procedimientoAC} />
-      )}
 
       {/* Mensaje cuando ningun accordion aplica (circuito AC puro, solo diodos, etc.) */}
       {!mostrarNodal && !mostrarTransitorio && !mostrarThevenin && !mostrarSuper && (
@@ -788,6 +898,7 @@ function ACSimularBtn({ isActive, isRunning, onSimular }) {
         <button
           className="control-btn"
           disabled={!isActive || isRunning}
+          title="Análisis AC: barrido en frecuencia. Linealiza los componentes alrededor del punto de operación DC y resuelve fasores complejos para cada frecuencia. Útil para filtros, ganancia y fase de circuitos lineales (RC, RL, RLC). NO es adecuado para gran señal (BJT como interruptor, rectificadores), porque la linealización deja de ser válida fuera del entorno del punto de operación — para esos casos usa Transitorio."
           onClick={() => onSimular({
             configuracion_ac: {
               f_inicial: Number(fInicial),
@@ -804,7 +915,132 @@ function ACSimularBtn({ isActive, isRunning, onSimular }) {
   );
 }
 
-// Procedimiento de Calculo
+// Boton de Simulacion Transitoria (dominio del tiempo)
+//
+// Inputs en milisegundos (t_stop) y microsegundos (delta_t) 
+
+function TRANSimularBtn({ isActive, isRunning, onSimular }) {
+  // Defaults pensados para una fuente AC de 60 Hz (periodo 16.67 ms):
+  //   t_stop = 50 ms  -> 3 ciclos completos para ver el on/off del LED claramente
+  //   delta_t = 100 µs -> 167 muestras por ciclo, suficiente para resolver el cruce
+  const [tStopMs,    setTStopMs]    = useState('50');   // ms
+  const [deltaTUs,   setDeltaTUs]   = useState('100');  // µs
+
+  const inputStyle = {
+    background: '#1e1e2e', border: '1px solid #444', borderRadius: 4,
+    padding: '3px 7px', color: '#ccc', fontSize: 11, fontFamily: 'monospace',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          style={{ ...inputStyle, width: 60 }}
+          value={tStopMs}
+          onChange={(e) => setTStopMs(e.target.value)}
+          placeholder="t_stop"
+          title="Tiempo total de simulación en milisegundos. Para 60 Hz, 50 ms da ~3 ciclos."
+        />
+        <span style={{ fontSize: 11, color: '#888', fontFamily: 'monospace' }}>ms</span>
+        <input
+          style={{ ...inputStyle, width: 60 }}
+          value={deltaTUs}
+          onChange={(e) => setDeltaTUs(e.target.value)}
+          placeholder="Δt"
+          title="Paso de integración en microsegundos. Menor = más preciso pero más lento. 100 µs suele bastar para 60 Hz."
+        />
+        <span style={{ fontSize: 11, color: '#888', fontFamily: 'monospace' }}>µs</span>
+        <button
+          className="control-btn"
+          disabled={!isActive || isRunning}
+          title="Análisis Transitorio: resuelve el circuito en el dominio del tiempo (paso a paso con Newton-Raphson + MNA). Captura comportamiento no lineal en gran señal: BJT entrando/saliendo de saturación, rectificación de diodos, LEDs prendiendo/apagando con la onda AC. Es el análisis correcto para circuitos de switching donde el AC sweep falla."
+          onClick={() => onSimular({
+            configuracion_transitorio: {
+              t_stop:  Number(tStopMs) / 1000,    // ms -> s
+              delta_t: Number(deltaTUs) / 1e6,    // µs -> s
+            },
+          })}
+        >
+          {isRunning ? '⏳ Simulando…' : '⏱ Simular Transitorio'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TRANControlPanel({ tranResults, speed, onSpeedChange, paused, onTogglePause }) {
+  // Slider lineal de 0...100 que mapea a speed logaritmico entre 0.001 y 1
+  // (3 decadas). speedLog = 10 ** (slider/100 * 3 - 3)
+  const sliderValue = Math.round((Math.log10(speed) + 3) / 3 * 100);
+  const handleSlider = (e) => {
+    const v = Number(e.target.value);
+    const newSpeed = Math.pow(10, v / 100 * 3 - 3);
+    onSpeedChange(newSpeed);
+  };
+
+  // Calculamos info derivada para mostrar al usuario
+  const tMax = tranResults[tranResults.length - 1]?.tiempo ?? 0;
+  const tMin = tranResults[0]?.tiempo ?? 0;
+  const duracionSim = tMax - tMin;
+  const duracionReproduccion = duracionSim / speed;
+  // Factor humano-legible: cuantas veces mas lento que tiempo real
+  const factor = 1 / speed;
+
+  // Etiqueta descriptiva del nivel de velocidad
+  let etiqueta;
+  if (speed >= 0.5)      etiqueta = `Tiempo real (×${speed.toFixed(2)})`;
+  else if (speed >= 0.1) etiqueta = `Lento (${factor.toFixed(0)}× más lento)`;
+  else if (speed >= 0.01) etiqueta = `Muy lento (${factor.toFixed(0)}× más lento)`;
+  else                   etiqueta = `Cámara lenta (${factor.toFixed(0)}× más lento)`;
+
+  return (
+    <div style={{
+      marginTop: 10,
+      padding: '10px 12px',
+      background: '#1a1f2e',
+      border: '1px solid #2d3748',
+      borderRadius: 6,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'monospace' }}>
+          ⏱ Animación transitoria — {tranResults.length} muestras · {(duracionSim * 1000).toFixed(2)} ms simulados
+        </span>
+        <button
+          onClick={onTogglePause}
+          className="control-btn"
+          style={{ fontSize: 11, padding: '3px 10px' }}
+          title={paused ? 'Reanudar animación' : 'Pausar animación'}
+        >
+          {paused ? '▶ Reanudar' : '⏸ Pausar'}
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 11, color: '#888', minWidth: 80 }}>Velocidad:</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={sliderValue}
+          onChange={handleSlider}
+          style={{ flex: 1, accentColor: '#5fb3ff' }}
+          title="Mueve el slider para ajustar la velocidad de reproducción. Más a la izquierda = más lento (cámara lenta para ver el cruce del umbral); más a la derecha = tiempo real."
+        />
+        <span style={{ fontSize: 11, color: '#5fb3ff', fontFamily: 'monospace', minWidth: 100, textAlign: 'right' }}>
+          {etiqueta}
+        </span>
+      </div>
+      <div style={{ marginTop: 4, fontSize: 10, color: '#666', fontFamily: 'monospace', textAlign: 'right' }}>
+        Un ciclo completo en pantalla: {duracionReproduccion >= 1 ? `${duracionReproduccion.toFixed(2)} s` : `${(duracionReproduccion * 1000).toFixed(0)} ms`}
+      </div>
+    </div>
+  );
+}
+
+// Procedimiento de Calculo 
+// El shape { titulo, pasos: [{ paso, calculos: [] }] } que devuelve el backend
+// es identico para ambos tipos, por eso un solo componente sirve para los dos.
+
 function ProcedimientoPanel({ procedimiento }) {
   const [pasoAbierto, setPasoAbierto] = useState(null);
 
@@ -874,6 +1110,7 @@ function ProcedimientoPanel({ procedimiento }) {
 }
 
 // Transformacion de Fuente
+
 function TransformacionFuentePanel({ resultado, loading, error, netlist, onCalcular }) {
   const [fuenteId, setFuenteId] = useState('');
 

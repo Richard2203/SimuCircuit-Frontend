@@ -10,7 +10,15 @@ import { Circuit }        from '../domain';
  * @param {boolean} [props.preview]       - Modo compacto (cards/listados).
  * @param {boolean} [props.energized]     - Animacion de energizacion.
  */
-export function CircuitSVG({ circuit, preview = false, energized = false, dcResults = null }) {
+export function CircuitSVG({
+  circuit,
+  preview = false,
+  energized = false,
+  dcResults = null,
+  tranResults = null,   // array de snapshots {tiempo, voltajes, corrientes}
+  tranSpeed = 0.05,     // multiplicador de velocidad de reproducción (1 = real)
+  tranPaused = false,
+}) {
   if (!circuit) return null;
 
   const c = circuit instanceof Circuit ? circuit : Circuit.fromAny(circuit);
@@ -44,6 +52,9 @@ export function CircuitSVG({ circuit, preview = false, energized = false, dcResu
           preview={preview}
           energized={energized}
           dcResults={dcResults}
+          tranResults={tranResults}
+          tranSpeed={tranSpeed}
+          tranPaused={tranPaused}
         />
       </div>
     );
