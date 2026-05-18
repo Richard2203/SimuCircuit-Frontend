@@ -10,7 +10,7 @@ import {
   nudgePos,
   componenteConPosicion,
   rotarComponente,
-} from './circuitLayout';
+} from './Circuitlayout';
 
 const DIFICULTADES_DEFAULT = ['Básico', 'Intermedio', 'Avanzado'];
 

@@ -14,7 +14,7 @@ import {
   rotacionSugerida,
   etiquetaDireccion,
   etiquetaRotacion,
-} from './circuitLayout';
+} from './Circuitlayout';
 
 /* Lista de tipos para el select de tipo */
 const TIPOS_COMPONENTE = [

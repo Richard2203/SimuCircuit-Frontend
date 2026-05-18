@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Component, labelForTipo, labelForPin, resolvePinKey } from '../../../domain';
-import { DIRECCIONES } from './circuitLayout';
+import { DIRECCIONES } from './Circuitlayout';
 
 /**
  * FilaComponente — Fila individual de un componente en la lista.
