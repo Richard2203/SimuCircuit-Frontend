@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_BACKEND_URL;
+const BASE_URL = "https://simu-production-e1bf.up.railway.app";
 
 /* -- Token de administrador --------------------------------- */
 
