@@ -18,6 +18,53 @@ const fmtA    = (v)         => formatValue(Number(v), 'A');
 const fmtOhm  = (v)         => formatValue(Number(v), 'Ω');
 const fmtAuto = (v, unit='') => formatValue(Number(v), unit);
 
+
+function expandirCorrientes(currents, comps = []) {
+  const filas = [];
+  for (const [id, i] of Object.entries(currents ?? {})) {
+    if (i == null) continue;
+
+    if (typeof i === 'number') {
+      filas.push({ label: `I(${id})`, value: i });
+      continue;
+    }
+
+    if (typeof i === 'object') {
+      // BJT
+      if ('Ib' in i || 'Ic' in i || 'Ie' in i) {
+        if ('Ib' in i) filas.push({ label: `Ib(${id})`, value: i.Ib });
+        if ('Ic' in i) filas.push({ label: `Ic(${id})`, value: i.Ic });
+        if ('Ie' in i) filas.push({ label: `Ie(${id})`, value: i.Ie });
+        continue;
+      }
+      
+      if ('Id' in i || 'Ig' in i || 'Is' in i) {
+        if ('Id' in i) filas.push({ label: `Id(${id})`, value: i.Id });
+        if ('Ig' in i) filas.push({ label: `Ig(${id})`, value: i.Ig });
+        if ('Is' in i) filas.push({ label: `Is(${id})`, value: i.Is });
+        continue;
+      }
+      // Regulador de voltaje
+      if ('I_in' in i || 'I_out' in i || 'I_gnd' in i) {
+        const comp = comps.find(c => c.id === id);
+        const code = String(comp?.value || '').toUpperCase();
+        const tipo = String(comp?.params?.tipo || '').toLowerCase();
+        const ajustable = /^LM(317|337|338|350)/.test(code) || tipo.includes('ajustable');
+        const gndLabel = ajustable ? 'I_adj' : 'I_gnd';
+
+        if ('I_in'  in i) filas.push({ label: `I_in(${id})`,  value: i.I_in  });
+        if ('I_out' in i) filas.push({ label: `I_out(${id})`, value: i.I_out });
+        if ('I_gnd' in i) filas.push({ label: `${gndLabel}(${id})`, value: i.I_gnd });
+        continue;
+      }
+      
+      const primer = Object.values(i).find(v => typeof v === 'number');
+      if (primer !== undefined) filas.push({ label: `I(${id})`, value: primer });
+    }
+  }
+  return filas;
+}
+
 /**
  * Simulator — Vista del simulador para un circuito seleccionado.
  *
@@ -257,11 +304,11 @@ export function Simulator({ state, dispatch, api }) {
                       </span>
                     </p>
                   ))}
-                  {Object.entries(simResultadoDC.currents ?? {}).map(([id, i]) => (
-                    <p key={id} style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
-                      <span style={{ color: '#64748b' }}>I({id})</span>{' '}
+                  {expandirCorrientes(simResultadoDC.currents, netlist).map(({ label, value }) => (
+                    <p key={label} style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                      <span style={{ color: '#64748b' }}>{label}</span>{' '}
                       <span style={{ color: '#4ade80', fontFamily: 'monospace', fontWeight: 600 }}>
-                        {fmtA(i)}
+                        {fmtA(value)}
                       </span>
                     </p>
                   ))}
@@ -461,6 +508,7 @@ function AccordionsCondicionales({
       {mostrarNodal && A('nodal', 'Análisis Nodal/Mallas DC', '⚡',
         <NodalPanel
           resultado={analisisResultado?.tipo === 'nodal' ? analisisResultado : simResultadoDC}
+          netlist={netlist}
           loading={loading?.analisisNodal}
           onCalcular={() => api.calcularNodal()}
         />
@@ -619,7 +667,7 @@ const Placeholder = ({ text }) => (
 
 // Analisis Nodal
 
-function NodalPanel({ resultado, loading, onCalcular }) {
+function NodalPanel({ resultado, netlist, loading, onCalcular }) {
   const voltages = resultado?.voltages ?? {};
   const currents = resultado?.currents ?? {};
   const tieneData = Object.keys(voltages).length > 0;
@@ -637,8 +685,8 @@ function NodalPanel({ resultado, loading, onCalcular }) {
           {Object.keys(currents).length > 0 && (
             <>
               <p style={{ fontSize: 11, color: '#5a6278', margin: '4px 0 0', fontWeight: 500 }}>Corrientes de rama</p>
-              {Object.entries(currents).map(([id, i]) => (
-                <ROW key={id} label={`I(${id})`} value={`${fmtA(i)}`} color="#4ade80" />
+              {expandirCorrientes(currents, netlist).map(({ label, value }) => (
+                <ROW key={label} label={label} value={`${fmtA(value)}`} color="#4ade80" />
               ))}
             </>
           )}
@@ -929,34 +977,76 @@ function TRANSimularBtn({ isActive, isRunning, onSimular }) {
   const [tStopMs,    setTStopMs]    = useState('50');   // ms
   const [deltaTUs,   setDeltaTUs]   = useState('100');  // µs
 
+  // Rango permitido (en las unidades del input):
+  //   tStopMs   en milisegundos
+  //   deltaTUs  en microsegundos
+  // El mismo intervalo [1e-6, 1e+6] aplica a ambos. Esto cubre desde
+  // simulaciones de nanosegundos (1e-6 ms = 1 ns) hasta horas (1e+6 ms ≈ 16 min).
+  const RANGE_MIN = 1e-6;
+  const RANGE_MAX = 1e6;
+
+  function validarRango(strVal, etiqueta) {
+    if (strVal.trim() === '') return `${etiqueta}: requerido`;
+    const n = Number(strVal);
+    if (!Number.isFinite(n))    return `${etiqueta}: número inválido`;
+    if (n <= 0)                  return `${etiqueta}: debe ser positivo`;
+    if (n < RANGE_MIN)           return `${etiqueta}: por debajo del mínimo (${RANGE_MIN})`;
+    if (n > RANGE_MAX)           return `${etiqueta}: por encima del máximo (${RANGE_MAX.toExponential(0)})`;
+    return null;
+  }
+
+  const errTStop  = validarRango(tStopMs,  't_stop');
+  const errDeltaT = validarRango(deltaTUs, 'Δt');
+
+  // Validacion cruzada: delta_t debe ser menor que t_stop
+  let errCruzado = null;
+  if (!errTStop && !errDeltaT) {
+    const tStopSec  = Number(tStopMs)  / 1000;
+    const deltaTSec = Number(deltaTUs) / 1e6;
+    if (deltaTSec >= tStopSec) {
+      errCruzado = 'Δt debe ser menor que t_stop';
+    } else if (tStopSec / deltaTSec > 200000) {
+      errCruzado = `Demasiados pasos (>${(tStopSec/deltaTSec).toExponential(0)}). Aumenta Δt o reduce t_stop`;
+    }
+  }
+
+  // El mensaje a mostrar: priorizamos en orden t_stop -> t -> cruzado.
+  const errorMsg = errTStop || errDeltaT || errCruzado;
+  const hayError = errorMsg !== null;
+
   const inputStyle = {
     background: '#1e1e2e', border: '1px solid #444', borderRadius: 4,
     padding: '3px 7px', color: '#ccc', fontSize: 11, fontFamily: 'monospace',
   };
+  // Si el campo correspondiente esta mal, se le pinta un borde rojo discreto
+  const inputStyleTStop  = { ...inputStyle, borderColor: errTStop  ? '#c0392b' : '#444' };
+  const inputStyleDeltaT = { ...inputStyle, borderColor: errDeltaT ? '#c0392b' : '#444' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
-          style={{ ...inputStyle, width: 60 }}
+          style={{ ...inputStyleTStop, width: 60 }}
           value={tStopMs}
           onChange={(e) => setTStopMs(e.target.value)}
           placeholder="t_stop"
-          title="Tiempo total de simulación en milisegundos. Para 60 Hz, 50 ms da ~3 ciclos."
+          title={`Tiempo total de simulación en milisegundos. Rango permitido: ${RANGE_MIN} a ${RANGE_MAX.toExponential(0)} ms.`}
         />
         <span style={{ fontSize: 11, color: '#888', fontFamily: 'monospace' }}>ms</span>
         <input
-          style={{ ...inputStyle, width: 60 }}
+          style={{ ...inputStyleDeltaT, width: 60 }}
           value={deltaTUs}
           onChange={(e) => setDeltaTUs(e.target.value)}
           placeholder="Δt"
-          title="Paso de integración en microsegundos. Menor = más preciso pero más lento. 100 µs suele bastar para 60 Hz."
+          title={`Paso de integración en microsegundos. Rango permitido: ${RANGE_MIN} a ${RANGE_MAX.toExponential(0)} µs. Menor = más preciso pero más lento.`}
         />
         <span style={{ fontSize: 11, color: '#888', fontFamily: 'monospace' }}>µs</span>
         <button
           className="control-btn"
-          disabled={!isActive || isRunning}
-          title="Análisis Transitorio: resuelve el circuito en el dominio del tiempo (paso a paso con Newton-Raphson + MNA). Captura comportamiento no lineal en gran señal: BJT entrando/saliendo de saturación, rectificación de diodos, LEDs prendiendo/apagando con la onda AC. Es el análisis correcto para circuitos de switching donde el AC sweep falla."
+          disabled={!isActive || isRunning || hayError}
+          title={hayError
+            ? errorMsg
+            : 'Análisis Transitorio: resuelve el circuito en el dominio del tiempo (paso a paso con Newton-Raphson + MNA). Captura comportamiento no lineal en gran señal: BJT entrando/saliendo de saturación, rectificación de diodos, LEDs prendiendo/apagando con la onda AC. Es el análisis correcto para circuitos de switching donde el AC sweep falla.'}
           onClick={() => onSimular({
             configuracion_transitorio: {
               t_stop:  Number(tStopMs) / 1000,    // ms -> s
@@ -967,6 +1057,20 @@ function TRANSimularBtn({ isActive, isRunning, onSimular }) {
           {isRunning ? '⏳ Simulando…' : '⏱ Simular Transitorio'}
         </button>
       </div>
+
+      {/* Mensaje de error debajo del input cuando algun valor esta fuera de
+          rango o las restricciones cruzadas fallan. Solo aparece si HAY error
+          para no agregar ruido visual en el flujo normal. */}
+      {hayError && (
+        <p style={{
+          fontSize: 11,
+          color: '#e74c3c',
+          margin: '2px 0 0',
+          fontFamily: 'monospace',
+        }}>
+          ⚠ {errorMsg}
+        </p>
+      )}
     </div>
   );
 }

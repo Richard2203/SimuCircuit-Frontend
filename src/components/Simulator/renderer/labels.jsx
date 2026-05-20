@@ -107,7 +107,8 @@ function getIdLabelPos(comp) {
 function getVregPinLabelAttrs(pin, label) {
   switch (label) {
     case 'Vin':  return { x: pin.x - 1, y: pin.y + 10, anchor: 'end'    };
-    case 'GND':  return { x: pin.x,     y: pin.y + 26, anchor: 'middle' };
+    case 'GND':
+    case 'ADJ':  return { x: pin.x,     y: pin.y + 26, anchor: 'middle' };
     case 'Vout': return { x: pin.x + 1, y: pin.y + 10, anchor: 'start'  };
     default:     return { x: pin.x,     y: pin.y + 16, anchor: 'middle' };
   }
@@ -169,6 +170,13 @@ export function CompLabels({ netlist }) {
         const isFET        = comp.type === 'transistor_fet';
         const needsPins    = isTransistor || isRegulator;
 
+        const codigoComercial = String(comp.value || '').toUpperCase();
+        const tipoRegulador   = String(comp.params?.tipo || '').toLowerCase();
+        const esAjustable     = isRegulator && (
+          /^LM(317|337|338|350)/.test(codigoComercial) ||
+          tipoRegulador.includes('ajustable')
+        );
+
         const pinLabelMap = isRegulator ? VREG_PIN_LABELS
                           : isFET       ? FET_PIN_LABELS
                           :               BJT_PIN_LABELS;
@@ -184,8 +192,13 @@ export function CompLabels({ netlist }) {
 
             {/* Etiquetas de pines: solo para transistores y reguladores */}
             {needsPins && Object.entries(comp.nodes ?? {}).map(([pinKey]) => {
-              const label = pinLabelMap[pinKey.toLowerCase()];
+              let label = pinLabelMap[pinKey.toLowerCase()];
               if (!label) return null;
+
+              if (esAjustable && label === 'GND') {
+                label = 'ADJ';
+              }
+
               const pin = resolvePin(pins, pinKey);
               if (!pin)  return null;
 

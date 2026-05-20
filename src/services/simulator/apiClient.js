@@ -1,5 +1,4 @@
-const URL    = import.meta.env.VITE_API_URL;
-const BASE_URL = URL || 'http://localhost:3001';
+const BASE_URL = 'http://localhost:3001';
 
 /* -- Token de administrador --------------------------------- */
 
