@@ -1,4 +1,5 @@
-const BASE_URL = "https://simu-production-e1bf.up.railway.app";
+// const BASE_URL = "https://simu-production-e1bf.up.railway.app";
+const BASE_URL = "http://localhost:3001";
 
 /* -- Token de administrador --------------------------------- */
 

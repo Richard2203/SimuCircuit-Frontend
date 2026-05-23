@@ -11,6 +11,7 @@ const MAX_VISIBLE = 32;
  */
 function normalize(str) {
   return (str ?? '')
+    .trim()
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
@@ -116,6 +117,19 @@ function getComponentLabels(circuit) {
  */
 function applyFilters(circuits, filters) {
   return circuits.filter((c) => {
+
+    // 1. Los componentes tienen prioridad absoluta, si el usuario marcó al menos un 'checkbox', ignoramos
+    // la unidad, el tema y la dificultad. Buscamos MERAMENTE por componente.
+    if (filters.components && filters.components.length > 0) {
+      const circuitComps = c.tipos_componentes || [];
+      const hasAny = filters.components.some((comp) => circuitComps.includes(comp));
+      
+      // Devuelve el resultado inmediatamente. 
+      // El código jamás llegará a evaluar los temas o las unidades.
+      return hasAny; 
+    }
+    
+    // 2. Modo normal, los filtros de texto, dificultad, unidad y tema funcionan como antes.
     if (filters.search &&
         !normalize(c.nombre).includes(normalize(filters.search)))
       return false;
@@ -127,21 +141,25 @@ function applyFilters(circuits, filters) {
     if (filters.unit && normalize(c.materia) !== normalize(filters.unit))
       return false;
 
-    if (filters.topic && normalize(c.unidad_tematica) !== normalize(filters.topic))
-      return false;
-
-    // Tipo: el backend lo pone embebido en alguna categoria
-    if (filters.type) {
+    // El arreglo de Categorías funciona para todos los circuitos, incluso los sin unidad_tematica/tema separados
+    if (filters.topic) {
       const inCategorias = (c.categorias ?? []).some((cat) =>
-        normalize(cat).includes(normalize(filters.type))
+        normalize(cat) === normalize(filters.topic)
       );
       if (!inCategorias) return false;
     }
 
-    // Componentes: OR
-    if (filters.components.length > 0) {
-      const circuitLabels = getComponentLabels(c);
-      const hasAny = filters.components.some((comp) => circuitLabels.includes(comp));
+    //// Tipo: Ahora el tipo se obtiene directamente de la tabla circuito para evitar confusiones
+    if (filters.type && normalize(c.tipo) !== normalize(filters.type))
+    {
+      return false;
+    } 
+
+    // Componentes: Lógica OR
+    if (filters.components.length > 0 && filters.componentes) {
+      const circuitComps = c.tipos_componentes || [];
+      // const circuitLabels = getComponentLabels(c);
+      const hasAny = filters.components.some((comp) => circuitComps.includes(comp));
       if (!hasAny) return false;
     }
 
@@ -190,6 +208,9 @@ export function Library({ state, dispatch, api }) {
   // normaliza cualquier JSON crudo que pueda llegar
   const dataset = (circuitosApi?.length ? circuitosApi : [])
     .map((c) => (c instanceof Circuit ? c : Circuit.fromAny(c)));
+
+    // Para pruebas:
+  // console.log("Estructura del circuito:", dataset[0]);
 
   const filtered = applyFilters(dataset, filters);
   const visible  = filtered.slice(0, MAX_VISIBLE);

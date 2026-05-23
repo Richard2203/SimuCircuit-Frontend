@@ -38,6 +38,7 @@ export class Circuit {
     materia         = '',
     unidad_tematica = '',
     tema            = '',
+    tipo            = '',
     categorias      = [],
     tipos_componentes = [],
     miniatura_svg   = '',
@@ -59,6 +60,8 @@ export class Circuit {
     this.unidad_tematica = unidad_tematica ?? '';
     /** @type {string} */
     this.tema = tema ?? '';
+    /** @type {string} */
+    this.tipo = tipo ?? '';
     /** @type {string[]} */
     this.categorias = Array.isArray(categorias) ? [...categorias] : [];
     /** @type {string[]} */
@@ -90,6 +93,7 @@ export class Circuit {
       materia:         raw.materia ?? '',
       unidad_tematica: raw.unidad_tematica ?? '',
       tema:            raw.tema ?? '',
+      tipo:            raw.tipo ?? '',
       categorias:      raw.categorias ?? [],
       tipos_componentes: raw.tipos_componentes ?? [],
       miniatura_svg:   raw.miniatura_svg ?? '',
@@ -115,6 +119,7 @@ export class Circuit {
       materia:         c.materia ?? '',
       unidad_tematica: c.unidad_tematica ?? '',
       tema:            c.tema ?? '',
+      tipo:            c.tipo ?? '',
       categorias:      c.categorias ?? [],
       tipos_componentes: c.tipos_componentes ?? [],
       miniatura_svg:   c.miniatura_svg ?? raw.miniatura_svg ?? '',
@@ -139,6 +144,7 @@ export class Circuit {
       materia:         raw.unit ?? raw.materia ?? '',
       unidad_tematica: raw.topic ?? raw.unidad_tematica ?? '',
       tema:            raw.tema ?? '',
+      tipo:            raw.tipo ?? '',
       categorias:      raw.categorias ?? [],
       tipos_componentes: raw.components ?? raw.tipos_componentes ?? [],
       miniatura_svg:   raw.miniatura_svg ?? '',
@@ -297,6 +303,7 @@ export class Circuit {
       materia:           this.materia,
       unidad_tematica:   this.unidad_tematica,
       tema:              this.tema,
+      tipo:              this.tipo,
       categorias:        [...this.categorias],
       tipos_componentes: [...this.tipos_componentes],
       miniatura_svg:     this.miniatura_svg,
@@ -319,6 +326,7 @@ export class Circuit {
         materia:           this.materia,
         unidad_tematica:   this.unidad_tematica,
         tema:              this.tema,
+        tipo:              this.tipo,
         categorias:        [...this.categorias],
         tipos_componentes: [...this.tipos_componentes],
       },

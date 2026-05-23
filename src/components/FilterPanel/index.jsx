@@ -16,24 +16,48 @@ export function FilterPanel({ filters, filtrosApi, dispatch }) {
   // Opciones: API cuando disponible, fallback a constantes locales
   const dificultades = filtrosApi?.dificultades ?? DIFFICULTIES;
   const materias     = filtrosApi?.materias     ?? UNITS;
-  const componentes  = COMPONENTS_LIST;
+  const componentes  = filtrosApi?.componentes  ?? COMPONENTS_LIST;
 
   // Temas: si la API los tiene como arreglo plano, usarlos directo;
   // si no, caer al mapa local por unidad
   const temasApi = filtrosApi?.temas ?? null;
-  const availableTopics = temasApi
-    ? temasApi
-    : (filters.unit ? TOPICS_BY_UNIT[filters.unit] || [] : []);
 
-  // Si se cambia la unidad y el tema actual ya no es valido, limpiarlo
+    // temasApi ahora es un objeto, se mostrarán los temas dependiendo de la unidad de aprendizaje seleccionada
+    let availableTopics = [];
+    if (filters.unit) {
+      availableTopics = temasApi
+        ? (temasApi[filters.unit] || [])
+        : (TOPICS_BY_UNIT[filters.unit] || []);
+    }
+
+  // const availableTopics = temasApi
+  //   ? temasApi
+  //   : (filters.unit ? TOPICS_BY_UNIT[filters.unit] || [] : []);
+
+  // Validación y limpieza: Si cambia la unidad, validamos el tema
   useEffect(() => {
-    if (filters.topic && !temasApi && filters.unit) {
-      const validTopics = TOPICS_BY_UNIT[filters.unit] || [];
-      if (!validTopics.includes(filters.topic)) {
+    if (filters.topic) {
+      if (!filters.unit) {
+        // Si la unidad regresó a "Todos" (string vacío), forzamos el tema a "Todos"
         dispatch('SET_FILTER', { ...filters, topic: '' });
+      } else {
+        // Si hay una unidad seleccionada, verificamos que el tema actual pertenezca a ella
+        if (!availableTopics.includes(filters.topic)) {
+          dispatch('SET_FILTER', { ...filters, topic: '' });
+        }
       }
     }
   }, [filters.unit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  //// Si se cambia la unidad y el tema actual ya no es valido, limpiarlo
+  // useEffect(() => {
+  //   if (filters.topic && !temasApi && filters.unit) {
+  //     const validTopics = TOPICS_BY_UNIT[filters.unit] || [];
+  //     if (!validTopics.includes(filters.topic)) {
+  //       dispatch('SET_FILTER', { ...filters, topic: '' });
+  //     }
+  //   }
+  // }, [filters.unit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Actualiza un campo de texto o select e inmediatamente despacha el filtro */
   const handleField = (key, value) => {
@@ -89,7 +113,7 @@ export function FilterPanel({ filters, filtrosApi, dispatch }) {
             label: 'Tema',
             key: 'topic',
             opts: availableTopics,
-            disabled: !temasApi && !filters.unit,
+            disabled: !filters.unit,
           },
           { label: 'Tipo de circuito',      key: 'type',       opts: CIRCUIT_TYPES },
         ].map((f) => (
