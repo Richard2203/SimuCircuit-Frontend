@@ -1,65 +1,47 @@
-// const BASE_URL = "https://simu-production-e1bf.up.railway.app";
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
-
-/* -- Token de administrador --------------------------------- */
+const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 const ADMIN_TOKEN_KEY = 'admin_auth_token';
 
-/**
- * Token placeholder usado cuando no hay sesion activa.
- */
-export const FAKE_ADMIN_TOKEN = 'FAKE_ADMIN_TOKEN_REPLACE_ME';
-
-/** Devuelve el token actual (real si hay sesion, fake si no). */
+/** Devuelve el token actual o null si no hay sesion */
 export function getAuthToken() {
   try {
-    return localStorage.getItem(ADMIN_TOKEN_KEY) || FAKE_ADMIN_TOKEN;
+    return localStorage.getItem(ADMIN_TOKEN_KEY) || null;
   } catch {
-    return FAKE_ADMIN_TOKEN;
+    return null;
   }
 }
 
-/** Guarda el token */
 export function setAuthToken(token) {
   try {
     if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
-  } catch { /* localStorage bloqueado */ }
+  } catch { }
 }
 
-/** Limpia el token (logout). */
 export function clearAuthToken() {
   try {
     localStorage.removeItem(ADMIN_TOKEN_KEY);
-  } catch { /* localStorage bloqueado */ }
+  } catch { }
 }
 
-/* -- Deteccion de rutas que requieren auth ------------------- */
-
-/**
- * Decide si una ruta debe llevar el header Authorization.
- * Solo las rutas /api/admin/... lo requieren, excepto las de auth publica.
- */
 function requiereAuth(path) {
-  if (!path.startsWith('/api/admin/')) return false;
-  // Rutas publicas dentro del namespace admin:
-  if (path.startsWith('/api/admin/auth/login'))        return false;
-  if (path.startsWith('/api/admin/auth/recuperacion')) return false;
-  if (path.startsWith('/api/admin/auth/restablecer'))  return false;
-  return true;
+  const rutasProtegidas = [
+    '/api/admin/logout',
+    '/api/admin/register',
+    '/api/admin/crearCircuito',
+    '/api/admin/modificarCircuito',
+    '/api/admin',
+  ];
+  return rutasProtegidas.some((ruta) => path.startsWith(ruta));
 }
-
-/* -- Errores -------------------------------------------------- */
 
 export class ApiError extends Error {
   constructor(mensaje, status, data = null) {
     super(mensaje);
-    this.name = 'ApiError';
+    this.name   = 'ApiError';
     this.status = status;
-    this.data = data;
+    this.data   = data;
   }
 }
-
-/* -- Request principal ---------------------------------------- */
 
 async function request(path, options = {}) {
   const url = `${BASE_URL}${path}`;
@@ -70,7 +52,8 @@ async function request(path, options = {}) {
   };
 
   if (requiereAuth(path)) {
-    headers['Authorization'] = `Bearer ${getAuthToken()}`;
+    const token = getAuthToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
   let response;
@@ -80,7 +63,6 @@ async function request(path, options = {}) {
     throw new ApiError(`No se pudo conectar al servidor: ${e.message}`, 0);
   }
 
-  // 204 No Content (tipico de DELETE) — no hay cuerpo JSON
   if (response.status === 204) return null;
 
   let body;
@@ -92,8 +74,7 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok) {
-    const mensaje = body?.mensaje ?? body?.message ?? `Error ${response.status}`;
-    // Si es 401 en una ruta admin protegida → limpiar token (sesión inválida)
+    const mensaje = body?.error ?? body?.mensaje ?? body?.message ?? `Error ${response.status}`;
     if (response.status === 401 && requiereAuth(path)) clearAuthToken();
     throw new ApiError(mensaje, response.status, body);
   }
@@ -101,28 +82,11 @@ async function request(path, options = {}) {
   return body;
 }
 
-/* --- API publica del cliente ................................... */
+/* API publica del cliente */
 
 export const apiClient = {
-  get(path) {
-    return request(path, { method: 'GET' });
-  },
-
-  post(path, body) {
-    return request(path, {
-      method: 'POST',
-      body: JSON.stringify(body ?? {}),
-    });
-  },
-
-  put(path, body) {
-    return request(path, {
-      method: 'PUT',
-      body: JSON.stringify(body ?? {}),
-    });
-  },
-
-  delete(path) {
-    return request(path, { method: 'DELETE' });
-  },
+  get(path)        { return request(path, { method: 'GET' }); },
+  post(path, body) { return request(path, { method: 'POST',   body: JSON.stringify(body ?? {}) }); },
+  put(path, body)  { return request(path, { method: 'PUT',    body: JSON.stringify(body ?? {}) }); },
+  delete(path)     { return request(path, { method: 'DELETE' }); },
 };

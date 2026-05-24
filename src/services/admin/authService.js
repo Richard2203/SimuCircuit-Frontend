@@ -1,134 +1,142 @@
 /**
- * authService — Autenticacion de administradores.
- *
- * Endpoints esperados (cuando se implementen):
- *   POST /api/admin/auth/login         { correo, contrasena } → { admin, token }
- *   POST /api/admin/auth/recuperacion  { correo }             → { mensaje }
- *   POST /api/admin/auth/restablecer   { token, nueva_contrasena } → { mensaje }
- *
- *  Credenciales de prueba:    admin@simu.mx / Admin1234!
- */
+ * authService — Autenticacion Firebase Auth + JWT */
 
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { setAuthToken, clearAuthToken } from '../simulator/apiClient';
 
-/* --- Mock de credenciales validas       */
+// Firebase config
+const firebaseConfig = {
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+};
 
-const CREDS_KEY = 'admin_mock_credentials';
+// Evitar inicializar Firebase mas de una vez (hot-reload de Vite)
+const firebaseApp = getApps().length === 0
+  ? initializeApp(firebaseConfig)
+  : getApps()[0];
 
-function getCreds() {
-  try {
-    const raw = localStorage.getItem(CREDS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* localStorage bloqueado */ }
-  // Default
-  return { 'admin@simu.mx': 'Admin1234!' };
-}
+const auth = getAuth(firebaseApp);
 
-function setCreds(creds) {
-  try { localStorage.setItem(CREDS_KEY, JSON.stringify(creds)); }
-  catch { /* localStorage bloqueado */ }
-}
+// URL del backend
+const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
-/* ── JWT falso para validar ──── */
-
-function base64UrlEncode(obj) {
-  const json = typeof obj === 'string' ? obj : JSON.stringify(obj);
-  return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/**
- * Genera un token con forma de JWT real (header.payload.signature) 
- */
-function generarTokenFake(admin) {
-  const header  = { alg: 'HS256', typ: 'JWT' };
-  const payload = {
-    sub: admin.id,
-    correo: admin.correo,
-    iss:  'simucircuit-admin-mock',
-    iat:  Math.floor(Date.now() / 1000),
-    exp:  Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24h
-  };
-  const sig = 'FAKE_SIGNATURE_REPLACE_WITH_REAL_BACKEND';
-  return `${base64UrlEncode(header)}.${base64UrlEncode(payload)}.${sig}`;
-}
-
-/* ---- API -------------------------------------------------- */
+// API 
 
 /**
  * Inicia sesion de administrador.
+ * 1. Firebase autentica al usuario y devuelve un idToken.
+ * 2. El idToken se manda al backend para verificar el claim admin:true.
+ *
  * @param {{ correo: string, contrasena: string }} credentials
- * @returns {Promise<{ admin: { id: number, correo: string }, token: string }>}
+ * @returns {Promise<{ admin: object, token: string }>}
  */
 async function loginAdmin({ correo, contrasena }) {
-  // Simulamos latencia de red
-  await new Promise((r) => setTimeout(r, 250));
-
-  const creds = getCreds();
-  if (!creds[correo] || creds[correo] !== contrasena) {
-    const err = new Error('Credenciales incorrectas');
+  // Paso 1 - autenticar con Firebase (cliente)
+  let userCredential;
+  try {
+    userCredential = await signInWithEmailAndPassword(auth, correo, contrasena);
+    console.log('Firebase message:', userCredential);
+  } catch (firebaseError) {
+    // Mapeo de errores
+    const mensajes = {
+      'auth/invalid-credential':     'Credenciales incorrectas.',
+      'auth/user-not-found':         'No existe una cuenta con ese correo.',
+      'auth/wrong-password':         'Contraseña incorrecta.',
+      'auth/invalid-email':          'El correo no tiene un formato válido.',
+      'auth/user-disabled':          'Esta cuenta ha sido deshabilitada.',
+      'auth/too-many-requests':      'Demasiados intentos. Intenta más tarde.',
+    };
+    const err = new Error(mensajes[firebaseError.code] || 'Error al iniciar sesión.');
     err.status = 401;
     throw err;
   }
 
-  // Buscar el admin en el mock de adminsService (para conservar el mismo id)
-  let admin;
-  try {
-    const raw = localStorage.getItem('admin_mock_admins');
-    const list = raw ? JSON.parse(raw) : [];
-    admin = list.find((a) => a.correo === correo);
-  } catch { /* ignore */ }
+  // Paso 2 - obtener el idToken firmado por Firebase
+  const idToken = await userCredential.user.getIdToken();
 
-  if (!admin) {
-    admin = { id: 1, correo };
+  // Paso 3 - verificar en el backend que el usuario tenga claim admin:true
+  let backendData;
+  try {
+    const response = await fetch(`${BASE_URL}/api/admin/login`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ idToken }),
+    });
+
+    backendData = await response.json();
+
+    if (!response.ok) {
+      // Si el backend rechaza cerrar sesion en Firebase tambien
+      await signOut(auth);
+      const err = new Error(backendData?.error || 'Acceso denegado.');
+      err.status = response.status;
+      throw err;
+    }
+  } catch (e) {
+    if (e.status) throw e;
+    await signOut(auth);
+    throw new Error('No se pudo conectar al servidor.');
   }
 
-  const token = generarTokenFake(admin);
-  setAuthToken(token);
-  return { admin, token };
+  // Paso 4 - guardar el idToken para las siguientes peticiones al backend
+  setAuthToken(idToken);
+
+  return {
+    admin: backendData.usuario,
+    token: idToken,
+  };
 }
 
 /**
- * Cierra la sesion local (limpia el token).
+ * Cierra la sesion: revoca en el backend + cierra en Firebase.
  */
-function logoutAdmin() {
+async function logoutAdmin() {
+  const token = localStorage.getItem('admin_auth_token');
+
+  // Avisar al backend para revocar refresh tokens
+  if (token) {
+    try {
+      await fetch(`${BASE_URL}/api/admin/logout`, {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+    } catch {
+      // Si falla el backend, igual cerramos sesión localmente
+    }
+  }
+
+  await signOut(auth);
   clearAuthToken();
 }
 
 /**
- * Solicita un enlace de recuperacion de contraseña.
+ * @param {{ correo: string }} params
  */
 async function solicitarRecuperacion({ correo }) {
-  await new Promise((r) => setTimeout(r, 200));
-  // eslint-disable-next-line no-console
-  console.info(`[mock] Recuperación solicitada para "${correo}". En modo real se enviaría un email con un token temporal.`);
-  return { mensaje: 'Si el correo está registrado, recibirás un enlace en breve.' };
-}
-
-/**
- * Restablece la contraseña usando un token de recuperacion
- */
-async function restablecerContrasena({ token, nueva_contrasena }) {
-  await new Promise((r) => setTimeout(r, 200));
-  if (!token || !nueva_contrasena) {
-    const err = new Error('Token o contraseña faltantes.');
+  try {
+    await sendPasswordResetEmail(auth, correo);
+    return { mensaje: 'Correo de recuperación enviado.' };
+  } catch (error) {
+    const mensajes = {
+      'auth/user-not-found': 'No existe una cuenta con ese correo.',
+      'auth/invalid-email':  'El correo no es válido.',
+    };
+    const err = new Error(mensajes[error.code] || 'Error al solicitar recuperación.');
     err.status = 400;
     throw err;
   }
-  // En el mock, asumimos que el token corresponde a admin@simu.mx
-  const creds = getCreds();
-  creds['admin@simu.mx'] = nueva_contrasena;
-  setCreds(creds);
-  return { mensaje: 'Contraseña actualizada correctamente.' };
 }
-
-export const _mockAuthInternals = {
-  getCreds,
-  setCreds,
-};
 
 export const authService = {
   loginAdmin,
   logoutAdmin,
   solicitarRecuperacion,
-  restablecerContrasena,
 };

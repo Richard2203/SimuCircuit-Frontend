@@ -9,9 +9,9 @@ const TABS = [
 ];
 
 /**
- * AdminPanel — Contenedor del panel de administrador (post-login)
+ * AdminPanel — Contenedor del panel de administrador (post-login).
  *
- * @param {{ admin: object, onLogout: () => void }} props
+ * @param {{ admin: { uid: string, email: string, nombre: string }, onLogout: () => void }} props
  */
 export function AdminPanel({ admin, onLogout }) {
   const [tabActiva, setTabActiva] = useState('admins');
@@ -24,6 +24,7 @@ export function AdminPanel({ admin, onLogout }) {
 
   return (
     <div className="admin-shell">
+
       {/* Navbar */}
       <header className="admin-navbar">
         <div className="admin-navbar__brand">
@@ -32,7 +33,10 @@ export function AdminPanel({ admin, onLogout }) {
         </div>
 
         <div className="admin-navbar__right">
-          <span className="admin-navbar__email">{admin?.correo}</span>
+          {/* Mostrar nombre si existe, sino el email */}
+          <span className="admin-navbar__email">
+            {admin?.nombre ?? admin?.email}
+          </span>
           <button className="admin-navbar__logout" onClick={handleLogout}>
             Cerrar sesión
           </button>
@@ -54,9 +58,10 @@ export function AdminPanel({ admin, onLogout }) {
 
       {/* Contenido */}
       <main className="admin-main">
-        {tabActiva === 'admins'    && <AdminGestion adminActual={admin} />}
+        {tabActiva === 'admins'    && <AdminGestion adminActual={admin} onLogout={handleLogout} />}
         {tabActiva === 'circuitos' && <CRUDCircuitos />}
       </main>
+
     </div>
   );
 }

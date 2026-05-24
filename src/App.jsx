@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useMediator }          from './hooks/useMediator';
 import { Library }              from './components/Library/index';
@@ -9,37 +9,49 @@ import { AdminPanel }           from './components/admin/panel/AdminPanel';
 import { authService }          from './services/admin/authService';
 import { Footer }               from './components/Footer';
 
-/* Sesion del administrador */
-
 const SESSION_KEY = 'admin_session';
 
 function getAdminSession() {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
+
 function setAdminSessionStorage(data) {
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
 }
+
 function clearAdminSession() {
-  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_KEY);
 }
 
-/* App principal */
-
-/**
- * App — Raiz de la aplicacion.
- *
- * Routing con react-router-dom:
- *   /admin/login         -> AdminLogin
- *   /admin/recuperacion  -> AdminRecuperacion
- *   /admin/panel         -> AdminPanel (requiere sesión, sino -> /admin/login)
- *   /*                   -> Simulador / Biblioteca (flujo principal)
- *
- */
 export default function App() {
   const [adminSession, setSession] = useState(getAdminSession);
+
+  useEffect(() => {
+    if (!adminSession) return;
+    const token = localStorage.getItem('admin_auth_token');
+    if (!token) {
+      clearAdminSession();
+      setSession(null);
+      return;
+    }
+    const url_base = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}`;
+
+    // Re-validar contra el backend
+    fetch(`${url_base}/api/admin/login`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ idToken: token }),
+    })
+      .then((r) => { if (!r.ok) throw new Error('expired'); })
+      .catch(() => {
+        clearAdminSession();
+        localStorage.removeItem('admin_auth_token');
+        setSession(null);
+      });
+  }, []); // solo al montar
 
   function handleLogin(result) {
     const session = result?.admin ?? result;
@@ -48,7 +60,7 @@ export default function App() {
   }
 
   function handleLogout() {
-    authService.logoutAdmin();   // limpia el token JWT del localStorage
+    authService.logoutAdmin();
     clearAdminSession();
     setSession(null);
   }
@@ -56,8 +68,22 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/admin/login"        element={<AdminLogin onLogin={handleLogin} />} />
-        <Route path="/admin/recuperacion" element={<AdminRecuperacion />} />
+        <Route
+          path="/admin/login"
+          element={
+            <RedirectIfAuth session={adminSession}>
+              <AdminLogin onLogin={handleLogin} />
+            </RedirectIfAuth>
+          }
+        />
+        <Route
+          path="/admin/recuperacion"
+          element={
+            <RedirectIfAuth session={adminSession}>
+              <AdminRecuperacion />
+            </RedirectIfAuth>
+          }
+        />
         <Route
           path="/admin/panel"
           element={
@@ -80,19 +106,24 @@ function RequireAuth({ session, children }) {
   return children;
 }
 
+function RedirectIfAuth({ session, children }) {
+  if (session) return <Navigate to="/admin/panel" replace />;
+  return children;
+}
+
 /* Vista principal del simulador */
 
 function MainSimulator() {
   const { state, dispatch, api } = useMediator();
   return (
-     <div style={{ minHeight: '100vh', background: '#0d0d0d', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1 }}>
-            {state.selectedCircuit
-              ? <Simulator state={state} dispatch={dispatch} api={api} />
-              : <Library   state={state} dispatch={dispatch} api={api} />
-            }
-          </div>
-          <Footer />
-        </div>
+    <div style={{ minHeight: '100vh', background: '#0d0d0d', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1 }}>
+        {state.selectedCircuit
+          ? <Simulator state={state} dispatch={dispatch} api={api} />
+          : <Library   state={state} dispatch={dispatch} api={api} />
+        }
+      </div>
+      <Footer />
+    </div>
   );
 }

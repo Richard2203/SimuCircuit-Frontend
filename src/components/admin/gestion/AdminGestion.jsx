@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getAuth, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { adminsService }     from '../../../services/admin/adminsService';
 import { InputContrasena }   from '../shared/InputContrasena';
 import { ModalConfirmacion } from '../shared/ModalConfirmacion';
@@ -6,12 +7,11 @@ import { ModalConfirmacion } from '../shared/ModalConfirmacion';
 const MAX_ADMINS = 2;
 
 /**
- * AdminGestion — Pestaña 1: gestion de administradores.
- * Tabla, formulario "nuevo admin" y cambio de contraseña propio.
+ * AdminGestion
  *
- * @param {{ adminActual: { id: number, correo: string } }} props
+ * @param {{ adminActual: { uid: string, email: string, nombre: string } }} props
  */
-export function AdminGestion({ adminActual }) {
+export function AdminGestion({ adminActual, onLogout }) {
   const [admins,  setAdmins]  = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,17 +20,20 @@ export function AdminGestion({ adminActual }) {
 
   // Formulario nuevo admin
   const [nuevoCorreo, setNuevoCorreo] = useState('');
+  const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevaPwd,    setNuevaPwd]    = useState('');
   const [confirmPwd,  setConfirmPwd]  = useState('');
   const [errNuevo,    setErrNuevo]    = useState('');
   const [okNuevo,     setOkNuevo]     = useState('');
+  const [loadingNuevo, setLoadingNuevo] = useState(false);
 
-  // Cambio de contraseña propia
+  // Cambio de contrasena propia
   const [pwdActual,  setPwdActual]  = useState('');
   const [pwdNueva,   setPwdNueva]   = useState('');
   const [pwdConfirm, setPwdConfirm] = useState('');
   const [errPwd,     setErrPwd]     = useState('');
   const [okPwd,      setOkPwd]      = useState('');
+  const [loadingPwd, setLoadingPwd] = useState(false);
 
   useEffect(() => { cargar(); }, []);
 
@@ -39,58 +42,108 @@ export function AdminGestion({ adminActual }) {
     try {
       const data = await adminsService.obtenerAdmins();
       setAdmins(data);
-    } finally { setLoading(false); }
+    } catch {
+      // Si falla, dejamos la lista vacia
+    } finally {
+      setLoading(false);
+    }
   }
 
-  /*---- Acciones -------------------------------------------------*/
+  /* Agregar admin */
   async function handleAgregar(e) {
     e.preventDefault();
     setErrNuevo(''); setOkNuevo('');
+
     if (nuevaPwd !== confirmPwd) { setErrNuevo('Las contraseñas no coinciden.'); return; }
     if (nuevaPwd.length < 8)     { setErrNuevo('La contraseña debe tener al menos 8 caracteres.'); return; }
+
+    setLoadingNuevo(true);
     try {
-      await adminsService.agregarAdmin({ correo: nuevoCorreo, contrasena: nuevaPwd });
-      setNuevoCorreo(''); setNuevaPwd(''); setConfirmPwd('');
+      await adminsService.agregarAdmin({
+        correo:    nuevoCorreo,
+        contrasena: nuevaPwd,
+        nombre:    nuevoNombre,
+      });
+      setNuevoCorreo(''); setNuevoNombre(''); setNuevaPwd(''); setConfirmPwd('');
       setOkNuevo('Administrador agregado correctamente.');
       cargar();
-    } catch { setErrNuevo('Error al agregar administrador.'); }
+    } catch (err) {
+      setErrNuevo(err.message || 'Error al agregar administrador.');
+    } finally {
+      setLoadingNuevo(false);
+    }
   }
 
-  async function handleEditar(id, correo) {
+  /* Editar admin */
+  async function handleEditar(uid, correo, nombre) {
     try {
-      await adminsService.editarCorreoAdmin({ id, correo });
+      await adminsService.editarAdmin({ uid, correo, nombre });
       setModalEditar(null);
       cargar();
-    } catch { alert('Error al editar correo.'); }
+    } catch (err) {
+      alert(err.message || 'Error al editar administrador.');
+    }
   }
 
-  async function handleEliminar(id) {
+  /* Eliminar admin */
+  async function handleEliminar(uid) {
     try {
-      await adminsService.eliminarAdmin({ id });
+      await adminsService.eliminarAdmin({ uid });
       setModalEliminar(null);
       cargar();
-    } catch { alert('Error al eliminar administrador.'); }
+    } catch (err) {
+      alert(err.message || 'Error al eliminar administrador.');
+    }
   }
 
+  /* Cambiar contrasena propia */
   async function handleCambiarPwd(e) {
     e.preventDefault();
     setErrPwd(''); setOkPwd('');
+
     if (pwdNueva !== pwdConfirm) { setErrPwd('Las contraseñas nuevas no coinciden.'); return; }
     if (pwdNueva.length < 8)     { setErrPwd('La nueva contraseña debe tener al menos 8 caracteres.'); return; }
+
+    setLoadingPwd(true);
     try {
-      await adminsService.cambiarContrasena({
-        id: adminActual.id, contrasena_actual: pwdActual, nueva_contrasena: pwdNueva,
-      });
+      const auth = getAuth();
+      const user = auth.currentUser;
+
+      if (!user) {
+        setErrPwd('No hay sesión activa. Vuelve a iniciar sesión.');
+        return;
+      }
+
+      // Reautenticar antes de cambiar contrasena
+      const credential = EmailAuthProvider.credential(user.email, pwdActual);
+      await reauthenticateWithCredential(user, credential);
+
+      // Cambiar la contrasena
+      await updatePassword(user, pwdNueva);
+
       setPwdActual(''); setPwdNueva(''); setPwdConfirm('');
-      setOkPwd('Contraseña actualizada correctamente.');
-    } catch { setErrPwd('Error al cambiar la contraseña.'); }
+      setOkPwd('Contraseña actualizada. Cerrando sesión…');
+      setTimeout(() => onLogout(), 2000);
+    } catch (err) {
+      const mensajes = {
+        'auth/wrong-password':         'La contraseña actual es incorrecta.',
+        'auth/invalid-credential':     'La contraseña actual es incorrecta.',
+        'auth/weak-password':          'La nueva contraseña es demasiado débil.',
+        'auth/requires-recent-login':  'Sesión expirada. Vuelve a iniciar sesión.',
+        'auth/too-many-requests':      'Demasiados intentos. Intenta más tarde.',
+      };
+      setErrPwd(mensajes[err.code] || err.message || 'Error al cambiar la contraseña.');
+    } finally {
+      setLoadingPwd(false);
+    }
   }
 
   const limitAlcanzado = admins.length >= MAX_ADMINS;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-      {/* Tabla */}
+
+      {/* Tabla de admins */}
       <section className="admin-section">
         <h3 className="admin-section__title">Administradores del sistema</h3>
         <p className="admin-section__subtitle">Máximo {MAX_ADMINS} administradores permitidos.</p>
@@ -100,14 +153,14 @@ export function AdminGestion({ adminActual }) {
         ) : (
           <TablaAdmins
             admins={admins}
-            adminActualId={adminActual.id}
+            adminActualUid={adminActual?.uid}
             onEditar={(a) => setModalEditar(a)}
             onEliminar={(a) => setModalEliminar(a)}
           />
         )}
       </section>
 
-      {/* Nuevo admin */}
+      {/* Agregar admin */}
       <section className="admin-section">
         <h3 className="admin-section__title">Agregar administrador</h3>
 
@@ -119,6 +172,14 @@ export function AdminGestion({ adminActual }) {
         ) : (
           <form onSubmit={handleAgregar} className="admin-form-grid">
             <div>
+              <label className="admin-form-label">Nombre</label>
+              <input
+                type="text" className="admin-input"
+                value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)}
+                required placeholder="Nombre completo"
+              />
+            </div>
+            <div>
               <label className="admin-form-label">Correo</label>
               <input
                 type="email" className="admin-input"
@@ -126,35 +187,50 @@ export function AdminGestion({ adminActual }) {
                 required placeholder="nuevo@admin.mx"
               />
             </div>
-            <InputContrasena label="Contraseña"            name="nueva_contrasena"     value={nuevaPwd}   onChange={setNuevaPwd}   mostrarFortaleza />
-            <InputContrasena label="Confirmar contraseña"  name="confirmar_contrasena" value={confirmPwd} onChange={setConfirmPwd} />
+            <InputContrasena label="Contraseña"           name="nueva_contrasena"     value={nuevaPwd}   onChange={setNuevaPwd}   mostrarFortaleza />
+            <InputContrasena label="Confirmar contraseña" name="confirmar_contrasena" value={confirmPwd} onChange={setConfirmPwd} />
 
-            {errNuevo && <p className="admin-error-msg" style={{ gridColumn: '1/-1' }}>{errNuevo}</p>}
+            {errNuevo && <p className="admin-error-msg"  style={{ gridColumn: '1/-1' }}>{errNuevo}</p>}
             {okNuevo  && <p className="admin-success-msg" style={{ gridColumn: '1/-1' }}>{okNuevo}</p>}
-            <button type="submit" className="admin-btn admin-btn--primary" style={{ gridColumn: '1/-1', maxWidth: 200 }}>
-              Agregar
+
+            <button
+              type="submit"
+              className="admin-btn admin-btn--primary"
+              style={{ gridColumn: '1/-1', maxWidth: 200 }}
+              disabled={loadingNuevo}
+            >
+              {loadingNuevo ? 'Agregando…' : 'Agregar'}
             </button>
           </form>
         )}
       </section>
 
-      {/* Cambiar pwd propia */}
+      {/* Cambiar contraseña propia */}
       <section className="admin-section">
         <h3 className="admin-section__title">Cambiar mi contraseña</h3>
         <form onSubmit={handleCambiarPwd} style={{ maxWidth: 360 }}>
-          <InputContrasena label="Contraseña actual"           name="contrasena_actual"     value={pwdActual}  onChange={setPwdActual} />
-          <InputContrasena label="Nueva contraseña"            name="nueva_contrasena"      value={pwdNueva}   onChange={setPwdNueva}  mostrarFortaleza />
-          <InputContrasena label="Confirmar nueva contraseña"  name="confirmar_nueva_contrasena" value={pwdConfirm} onChange={setPwdConfirm} />
-          {errPwd && <p className="admin-error-msg" style={{ marginBottom: 8 }}>{errPwd}</p>}
+          <InputContrasena label="Contraseña actual"          name="contrasena_actual"          value={pwdActual}  onChange={setPwdActual} />
+          <InputContrasena label="Nueva contraseña"           name="nueva_contrasena"           value={pwdNueva}   onChange={setPwdNueva}  mostrarFortaleza />
+          <InputContrasena label="Confirmar nueva contraseña" name="confirmar_nueva_contrasena" value={pwdConfirm} onChange={setPwdConfirm} />
+
+          {errPwd && <p className="admin-error-msg"  style={{ marginBottom: 8 }}>{errPwd}</p>}
           {okPwd  && <p className="admin-success-msg">{okPwd}</p>}
-          <button type="submit" className="admin-btn admin-btn--primary">Cambiar contraseña</button>
+
+          <button
+            type="submit"
+            className="admin-btn admin-btn--primary"
+            disabled={loadingPwd}
+          >
+            {loadingPwd ? 'Actualizando…' : 'Cambiar contraseña'}
+          </button>
         </form>
       </section>
 
+      {/* Modales*/}
       {modalEditar && (
         <ModalEditarAdmin
           admin={modalEditar}
-          onGuardar={(correo) => handleEditar(modalEditar.id, correo)}
+          onGuardar={(correo, nombre) => handleEditar(modalEditar.uid, correo, nombre)}
           onCerrar={() => setModalEditar(null)}
         />
       )}
@@ -162,18 +238,18 @@ export function AdminGestion({ adminActual }) {
       <ModalConfirmacion
         abierto={!!modalEliminar}
         titulo="Eliminar administrador"
-        mensaje={`¿Eliminar a ${modalEliminar?.correo}? Esta acción no se puede deshacer.`}
+        mensaje={`¿Eliminar a ${modalEliminar?.email}? Esta acción no se puede deshacer.`}
         labelConfirmar="Eliminar"
-        onConfirmar={() => handleEliminar(modalEliminar.id)}
+        onConfirmar={() => handleEliminar(modalEliminar.uid)}
         onCancelar={() => setModalEliminar(null)}
       />
     </div>
   );
 }
 
-/* --- Sub-componentes ------------------------------------ */
+/* Sub-componentes */
 
-function TablaAdmins({ admins, adminActualId, onEditar, onEliminar }) {
+function TablaAdmins({ admins, adminActualUid, onEditar, onEliminar }) {
   if (admins.length === 0) {
     return <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No hay administradores registrados.</p>;
   }
@@ -181,21 +257,28 @@ function TablaAdmins({ admins, adminActualId, onEditar, onEliminar }) {
     <table className="admin-table">
       <thead>
         <tr>
+          <th>Nombre</th>
           <th>Correo</th>
           <th className="admin-table__actions">Acciones</th>
         </tr>
       </thead>
       <tbody>
         {admins.map((a) => (
-          <tr key={a.id}>
+          <tr key={a.uid}>
+            <td>{a.nombre ?? '—'}</td>
             <td>
-              {a.correo}
-              {a.id === adminActualId && <span className="admin-table__badge">Tú</span>}
+              {a.email}
+              {a.uid === adminActualUid && <span className="admin-table__badge">Tú</span>}
             </td>
             <td className="admin-table__actions">
-              <button title="Editar correo" className="admin-icon-btn" onClick={() => onEditar(a)}><PencilIcon /></button>
-              {a.id !== adminActualId && (
-                <button title="Eliminar" className="admin-icon-btn admin-icon-btn--danger" onClick={() => onEliminar(a)}><TrashIcon /></button>
+              <button title="Editar" className="admin-icon-btn" onClick={() => onEditar(a)}>
+                <PencilIcon />
+              </button>
+              {/* Cualquier admin puede eliminar a otro, pero no a sí mismo */}
+              {a.uid !== adminActualUid && (
+                <button title="Eliminar" className="admin-icon-btn admin-icon-btn--danger" onClick={() => onEliminar(a)}>
+                  <TrashIcon />
+                </button>
               )}
             </td>
           </tr>
@@ -205,22 +288,43 @@ function TablaAdmins({ admins, adminActualId, onEditar, onEliminar }) {
   );
 }
 
+/**
+ * Modal para editar email y nombre de un admin.
+ * Permite editar uno o ambos campos.
+ */
 function ModalEditarAdmin({ admin, onGuardar, onCerrar }) {
-  const [correo, setCorreo] = useState(admin.correo);
+  const [correo, setCorreo] = useState(admin.email);
+  const [nombre, setNombre] = useState(admin.nombre ?? '');
+
   return (
     <div className="admin-modal-overlay" onClick={onCerrar}>
       <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="admin-modal__title">Editar correo</h3>
-        <label className="admin-form-label">Nuevo correo</label>
-        <input type="email" className="admin-input" value={correo} onChange={(e) => setCorreo(e.target.value)} />
+        <h3 className="admin-modal__title">Editar administrador</h3>
+
+        <label className="admin-form-label">Nombre</label>
+        <input
+          type="text" className="admin-input"
+          value={nombre} onChange={(e) => setNombre(e.target.value)}
+          placeholder="Nombre completo"
+          style={{ marginBottom: 12 }}
+        />
+
+        <label className="admin-form-label">Correo</label>
+        <input
+          type="email" className="admin-input"
+          value={correo} onChange={(e) => setCorreo(e.target.value)}
+        />
+
         <div className="admin-modal__btn-row" style={{ marginTop: 16 }}>
           <button className="admin-btn admin-btn--cancel"  onClick={onCerrar}>Cancelar</button>
-          <button className="admin-btn admin-btn--primary" onClick={() => onGuardar(correo)}>Guardar</button>
+          <button className="admin-btn admin-btn--primary" onClick={() => onGuardar(correo, nombre)}>Guardar</button>
         </div>
       </div>
     </div>
   );
 }
+
+/* Iconos */
 
 function PencilIcon() {
   return (
@@ -230,6 +334,7 @@ function PencilIcon() {
     </svg>
   );
 }
+
 function TrashIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
