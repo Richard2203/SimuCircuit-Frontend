@@ -13,9 +13,9 @@ export const LED_COLORS = [
 ];
 
 function getColorByValue(v) {
-  if (!v) return LED_COLORS[1];
+  if (!v) return LED_COLORS[0];
   const upper = String(v).trim().toUpperCase();
-  return LED_COLORS.find((c) => c.value === upper) || LED_COLORS[1];
+  return LED_COLORS.find((c) => c.value === upper) || LED_COLORS[0];
 }
 
 /**
