@@ -8,7 +8,7 @@
  *   AnalysisAccordions   -> paneles de analisis condicionales
  *   format.js            -> formato de magnitudes fisicas
  */
-import { useRef, useState }       from 'react';
+import { useRef, useState, useEffect }       from 'react';
 import { toPng }                  from 'html-to-image';
 
 import { CircuitSVG }             from '../../utils/circuitSVG';
@@ -78,6 +78,8 @@ export function Simulator({ state, dispatch, api }) {
     simResultadoTRAN && Array.isArray(simResultadoTRAN) && simResultadoTRAN.length > 0;
   const hasSimButtons  =
     netlist.length > 0 && (flags.showDC || flags.showAC || flags.showTRAN);
+
+  const [mostrarInterpretacion, setMostrarInterpretacion] = useState(false);
 
   return (
     <div className="page-container">
@@ -153,12 +155,52 @@ export function Simulator({ state, dispatch, api }) {
           {/* Descripcion + resultados + analisis */}
           <div className="sim-panel p-5">
             <div className="desc-header">
-              <span style={{ fontSize: 14 }}>ℹ</span>
-              <span className="desc-header-text">Descripción</span>
+                <span style={{ fontSize: 14 }}>ℹ</span>
+                <span className="desc-header-text">Descripción</span>
+
+              {/* Botón para mostrar/ocultar la interpretación */}
+              <button 
+                className="control-btn primary" 
+                style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+                onClick={() => setMostrarInterpretacion(!mostrarInterpretacion)}
+              >
+                {mostrarInterpretacion ? 'Ocultar interpretación' : 'Interpretación de valores en los cálculos'}
+              </button>
             </div>
+
             <p className="circuit-desc">
               {circuit.descripcion ?? `Circuito — ${circuit.unidad_tematica} · ${circuit.materia}`}
             </p>
+
+            {/* Recuadro informativo que se despliega */}
+            {mostrarInterpretacion && (
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.05)', // Fondo sutil adaptado al modo oscuro
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                padding: '12px 16px',
+                color: 'var(--text-muted)',
+                fontSize: '0.9rem',
+                lineHeight: '1.5'
+              }}>
+                <strong style={{ color: 'var(--text)', display: 'block', marginBottom: '8px' }}>
+                  💡 Guía de signos numéricos:
+                </strong>
+                <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                  <li style={{ marginBottom: '6px' }}>
+                    <strong>Corriente:</strong> El signo en la corriente indica el sentido del flujo. Si el signo es positivo (+), significa que la corriente fluye desde el Pin 1 hacia el Pin 2. Si el signo es negativo (-), la corriente fluye desde el Pin 2 hacia el Pin 1.
+                  </li>
+                  <ul>
+                    <li>
+                      <strong>Para componentes de 3 pines</strong> la regla es parecida. Si el signo es positivo (+) la corriente fluye desde el pin hacia afuera. Si el signo es negativo (-), la corriente fluye desde el pin hacia adentro.
+                    </li>
+                  </ul>
+                  <li style={{ marginBottom: '6px' }}>
+                    <strong>Voltaje:</strong> Si el signo es negativo (-), indica una inversión en la polaridad respecto al nodo de referencia (Tierra), lo cual es común en mediciones inversas o fuentes de voltaje negativo.
+                  </li>
+                </ul>
+              </div>
+            )}
 
             {/* Resultados de simulacion */}
             {simResultadoDC && <DCResultBlock resultado={simResultadoDC} netlist={netlist} />}

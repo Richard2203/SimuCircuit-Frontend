@@ -271,7 +271,7 @@ export function ComponentValueLabel({
                 position: 'absolute', top: FOH + 2, left: 0,
                 whiteSpace: 'nowrap', background: '#2d1b2e',
                 color: '#f92672', border: '1px solid #f92672',
-                borderRadius: 4, padding: '2px 6px', fontSize: 10,
+                borderRadius: 4, padding: '0.2em 0.5em', fontSize: fontSize * 0.85,
                 fontFamily: 'sans-serif', zIndex: 9999,
                 pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
               }}>
