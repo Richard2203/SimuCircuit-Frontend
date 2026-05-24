@@ -23,15 +23,23 @@ export function clearAuthToken() {
   } catch { }
 }
 
+/**
+ * Decide si una ruta requiere Authorization.
+ */
 function requiereAuth(path) {
-  const rutasProtegidas = [
-    '/api/admin/logout',
-    '/api/admin/register',
-    '/api/admin/crearCircuito',
-    '/api/admin/modificarCircuito',
-    '/api/admin',
+  // Rutas ADMIN publicas (no requieren token)
+  const rutasPublicasAdmin = [
+    '/api/admin/login',
+    '/api/admin/recuperar-contrasena',
   ];
-  return rutasProtegidas.some((ruta) => path.startsWith(ruta));
+  if (rutasPublicasAdmin.some((ruta) => path.startsWith(ruta))) {
+    return false;
+  }
+
+  // Todas las demas /api/admin/... requieren token
+  if (path.startsWith('/api/admin')) return true;
+
+  return false;
 }
 
 export class ApiError extends Error {

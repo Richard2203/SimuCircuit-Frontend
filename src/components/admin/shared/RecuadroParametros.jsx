@@ -1,15 +1,10 @@
 import { SelectorBandasColor } from './SelectorBandasColor';
-import {
-  MODELOS_BJT,
-  MODELOS_FET,
-  MODELOS_REGULADOR,
-  MODELOS_DIODO,
-  MODELOS_LED,
-  paramsDeModelo,
-} from '../circuitos/modelosCatalog';
+import { useCatalogoComponentes } from '../circuitos/CatalogoComponentesContext';
+import { paramsDeModelo, esModeloLED } from '../circuitos/modelosCatalog';
 
 /**
  * RecuadroParametros — Recuadro de parametros adicionales por tipo de componente.
+ *
  * Props:
  *  @param {{
  *   tipo: string,
@@ -30,6 +25,15 @@ export function RecuadroParametros({
   onParamsBulkChange,
   value,
 }) {
+  const { catalogo, loading: catLoading } = useCatalogoComponentes();
+  const {
+    MODELOS_BJT,
+    MODELOS_FET,
+    MODELOS_REGULADOR,
+    MODELOS_DIODO,
+    MODELOS_LED,
+  } = catalogo;
+
   if (!tipo) return null;
 
   const p = params;
@@ -82,12 +86,41 @@ export function RecuadroParametros({
         <FuenteParams tipo={tipo} p={p} set={set} />
       )}
 
-      {tipo === 'diodo'             && <DiodoParams       p={p} set={set} value={value} onValueChange={onValueChange} onParamsBulkChange={onParamsBulkChange} />}
-      {tipo === 'capacitor'         && <CapacitorParams   p={p} set={set} />}
-      {tipo === 'bobina'            && <BobinaParams      p={p} set={set} />}
-      {tipo === 'transistor_bjt'    && <BJTParams         p={p} set={set} value={value} onValueChange={onValueChange} onParamsBulkChange={onParamsBulkChange} />}
-      {tipo === 'transistor_fet'    && <FETParams         p={p} set={set} value={value} onValueChange={onValueChange} onParamsBulkChange={onParamsBulkChange} />}
-      {tipo === 'regulador_voltaje' && <ReguladorParams   p={p} set={set} value={value} onValueChange={onValueChange} onParamsBulkChange={onParamsBulkChange} />}
+      {tipo === 'diodo' && (
+        <DiodoParams
+          p={p} set={set} value={value}
+          onValueChange={onValueChange} onParamsBulkChange={onParamsBulkChange}
+          MODELOS_DIODO={MODELOS_DIODO}
+          MODELOS_LED={MODELOS_LED}
+          catLoading={catLoading}
+        />
+      )}
+      {tipo === 'capacitor' && <CapacitorParams p={p} set={set} />}
+      {tipo === 'bobina'    && <BobinaParams    p={p} set={set} />}
+      {tipo === 'transistor_bjt' && (
+        <BJTParams
+          p={p} set={set} value={value}
+          onValueChange={onValueChange} onParamsBulkChange={onParamsBulkChange}
+          MODELOS_BJT={MODELOS_BJT}
+          catLoading={catLoading}
+        />
+      )}
+      {tipo === 'transistor_fet' && (
+        <FETParams
+          p={p} set={set} value={value}
+          onValueChange={onValueChange} onParamsBulkChange={onParamsBulkChange}
+          MODELOS_FET={MODELOS_FET}
+          catLoading={catLoading}
+        />
+      )}
+      {tipo === 'regulador_voltaje' && (
+        <ReguladorParams
+          p={p} set={set} value={value}
+          onValueChange={onValueChange} onParamsBulkChange={onParamsBulkChange}
+          MODELOS_REGULADOR={MODELOS_REGULADOR}
+          catLoading={catLoading}
+        />
+      )}
     </div>
   );
 }
@@ -128,8 +161,8 @@ function FuenteParams({ tipo, p, set }) {
 
 /* Diodo: combina rectificadores+zener (readonly) con LEDs (editables) */
 
-function DiodoParams({ p, set, value, onValueChange, onParamsBulkChange }) {
-  const esLED = MODELOS_LED.some((m) => m.value === value);
+function DiodoParams({ p, set, value, onValueChange, onParamsBulkChange, MODELOS_DIODO, MODELOS_LED, catLoading }) {
+  const esLED = esModeloLED(MODELOS_LED, value);
   const esNoLEDConModelo = MODELOS_DIODO.some((m) => m.value === value);
   const todosModelos = [...MODELOS_DIODO, ...MODELOS_LED];
 
@@ -142,8 +175,8 @@ function DiodoParams({ p, set, value, onValueChange, onParamsBulkChange }) {
   return (
     <>
       <Field label="Modelo del diodo">
-        <select className="admin-select" value={value ?? ''} onChange={(e) => handleModeloChange(e.target.value)}>
-          <option value="">— Seleccionar modelo —</option>
+        <select className="admin-select" value={value ?? ''} onChange={(e) => handleModeloChange(e.target.value)} disabled={catLoading}>
+          <option value="">{catLoading ? 'Cargando…' : '— Seleccionar modelo —'}</option>
           <optgroup label="Rectificadores y Zener (valores fijos)">
             {MODELOS_DIODO.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </optgroup>
@@ -222,7 +255,7 @@ function BobinaParams({ p, set }) {
 
 /* BJT — modelo del catalogo autocompleta TODO readonly */
 
-function BJTParams({ p, set, value, onValueChange, onParamsBulkChange }) {
+function BJTParams({ p, set, value, onValueChange, onParamsBulkChange, MODELOS_BJT, catLoading }) {
   const hayModelo = !!value;
 
   function handleModeloChange(nuevoValue) {
@@ -234,8 +267,8 @@ function BJTParams({ p, set, value, onValueChange, onParamsBulkChange }) {
   return (
     <>
       <Field label="Modelo del transistor BJT">
-        <select className="admin-select" value={value ?? ''} onChange={(e) => handleModeloChange(e.target.value)}>
-          <option value="">— Seleccionar modelo —</option>
+        <select className="admin-select" value={value ?? ''} onChange={(e) => handleModeloChange(e.target.value)} disabled={catLoading}>
+          <option value="">{catLoading ? 'Cargando…' : '— Seleccionar modelo —'}</option>
           {MODELOS_BJT.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </Field>
@@ -262,7 +295,7 @@ function BJTParams({ p, set, value, onValueChange, onParamsBulkChange }) {
 
 /* FET — idem BJT */
 
-function FETParams({ p, set, value, onValueChange, onParamsBulkChange }) {
+function FETParams({ p, set, value, onValueChange, onParamsBulkChange, MODELOS_FET, catLoading }) {
   const hayModelo = !!value;
 
   function handleModeloChange(nuevoValue) {
@@ -274,8 +307,8 @@ function FETParams({ p, set, value, onValueChange, onParamsBulkChange }) {
   return (
     <>
       <Field label="Modelo del transistor FET">
-        <select className="admin-select" value={value ?? ''} onChange={(e) => handleModeloChange(e.target.value)}>
-          <option value="">— Seleccionar modelo —</option>
+        <select className="admin-select" value={value ?? ''} onChange={(e) => handleModeloChange(e.target.value)} disabled={catLoading}>
+          <option value="">{catLoading ? 'Cargando…' : '— Seleccionar modelo —'}</option>
           {MODELOS_FET.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </Field>
@@ -300,7 +333,7 @@ function FETParams({ p, set, value, onValueChange, onParamsBulkChange }) {
 
 /* Regulador — idem */
 
-function ReguladorParams({ p, set, value, onValueChange, onParamsBulkChange }) {
+function ReguladorParams({ p, set, value, onValueChange, onParamsBulkChange, MODELOS_REGULADOR, catLoading }) {
   const hayModelo = !!value;
 
   function handleModeloChange(nuevoValue) {
@@ -312,8 +345,8 @@ function ReguladorParams({ p, set, value, onValueChange, onParamsBulkChange }) {
   return (
     <>
       <Field label="Modelo del regulador">
-        <select className="admin-select" value={value ?? ''} onChange={(e) => handleModeloChange(e.target.value)}>
-          <option value="">— Seleccionar modelo —</option>
+        <select className="admin-select" value={value ?? ''} onChange={(e) => handleModeloChange(e.target.value)} disabled={catLoading}>
+          <option value="">{catLoading ? 'Cargando…' : '— Seleccionar modelo —'}</option>
           {MODELOS_REGULADOR.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </Field>

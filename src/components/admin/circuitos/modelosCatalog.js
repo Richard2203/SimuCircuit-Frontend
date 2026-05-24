@@ -1,73 +1,189 @@
 /**
- * modelosCatalog.js — Catalogo de modelos predeterminados (datasheets).
- *
- * Los transistores BJT, transistores FET, reguladores de voltaje y diodos
- * no-LED tienen modelos comerciales con valores fijos definidos en el
- * backend. El admin solo elige el modelo del dropdown y los demas campos
- * (β, Vbe, etc.) se autocompletan en read-only.
+ * modelosCatalog.js - Transformaciones y helpers para los catalogos de componentes.
+ * Los componentes consumen el catalogo via useCatalogoComponentes().
  */
 
-
-/*  BJT — Transistor Bipolar                                     */
-export const MODELOS_BJT = [
-  { value: '2N2222A', label: 'NPN Uso General (2N2222A)',     params: { tipo: 'NPN', configuracion: 'Uso General',  beta: 100, vbe_saturacion: 0.600, vce_saturacion: 0.300, corriente_colector_max: 0.800, potencia_maxima: 0.500,  frecuencia_transicion: 300, modo_operacion: 'Amplificador/Interruptor' } },
-  { value: '2N3904',  label: 'NPN Uso General (2N3904)',      params: { tipo: 'NPN', configuracion: 'Uso General',  beta: 100, vbe_saturacion: 0.650, vce_saturacion: 0.200, corriente_colector_max: 0.200, potencia_maxima: 0.625,  frecuencia_transicion: 300, modo_operacion: 'Amplificador/Interruptor' } },
-  { value: 'BC547B',  label: 'NPN Alta Ganancia (BC547B)',    params: { tipo: 'NPN', configuracion: 'Audio/Señal',  beta: 200, vbe_saturacion: 0.700, vce_saturacion: 0.200, corriente_colector_max: 0.100, potencia_maxima: 0.500,  frecuencia_transicion: 300, modo_operacion: 'Amplificador Lineal' } },
-  { value: 'ST9013H', label: 'NPN Alta Corriente (ST9013H)',  params: { tipo: 'NPN', configuracion: 'Carga Media',  beta: 150, vbe_saturacion: 0.800, vce_saturacion: 0.600, corriente_colector_max: 0.500, potencia_maxima: 0.625,  frecuencia_transicion: 150, modo_operacion: 'Interruptor' } },
-  { value: 'TIP41C',  label: 'NPN Potencia (TIP41C)',         params: { tipo: 'NPN', configuracion: 'Potencia',     beta:  15, vbe_saturacion: 1.500, vce_saturacion: 1.500, corriente_colector_max: 6.000, potencia_maxima: 65.000, frecuencia_transicion:   3, modo_operacion: 'Potencia' } },
-  { value: '2N3906',  label: 'PNP Uso General (2N3906)',      params: { tipo: 'PNP', configuracion: 'Uso General',  beta: 100, vbe_saturacion: 0.650, vce_saturacion: 0.250, corriente_colector_max: 0.200, potencia_maxima: 0.625,  frecuencia_transicion: 250, modo_operacion: 'Amplificador/Interruptor' } },
-  { value: 'BC557',   label: 'PNP Alta Ganancia (BC557)',     params: { tipo: 'PNP', configuracion: 'Audio/Señal',  beta: 200, vbe_saturacion: 0.700, vce_saturacion: 0.200, corriente_colector_max: 0.100, potencia_maxima: 0.500,  frecuencia_transicion: 150, modo_operacion: 'Amplificador Lineal' } },
-  { value: 'TIP42C',  label: 'PNP Potencia (TIP42C)',         params: { tipo: 'PNP', configuracion: 'Potencia',     beta:  15, vbe_saturacion: 1.500, vce_saturacion: 1.500, corriente_colector_max: 6.000, potencia_maxima: 65.000, frecuencia_transicion:   3, modo_operacion: 'Potencia' } },
-];
-
-
-/*  FET — Transistor de Efecto de Campo                         */
-export const MODELOS_FET = [
-  { value: '2N5457',  label: 'JFET Canal N Señal (2N5457)',         params: { tipo: 'JFET_N',   idss: 0.003, vp: -2.000, gm: 0.003, rd: 100000.000, configuracion: 'Señal',       modo_operacion: 'Amplificador Lineal' } },
-  { value: '2N5460',  label: 'JFET Canal P Señal (2N5460)',         params: { tipo: 'JFET_P',   idss: 0.005, vp:  2.000, gm: 0.004, rd: 100000.000, configuracion: 'Señal',       modo_operacion: 'Amplificador Lineal' } },
-  { value: '2N7000',  label: 'MOSFET Canal N Señal (2N7000)',       params: { tipo: 'MOSFET_N', idss: 0.200, vp:  2.000, gm: 0.320, rd:      5.000, configuracion: 'Interruptor', modo_operacion: 'Conmutación Rápida' } },
-  { value: 'IRFZ44N', label: 'MOSFET Canal N Potencia (IRFZ44N)',   params: { tipo: 'MOSFET_N', idss:49.000, vp:  3.000, gm:15.000, rd:      0.017, configuracion: 'Potencia',    modo_operacion: 'Control de Motores' } },
-  { value: 'IRF9540N',label: 'MOSFET Canal P Potencia (IRF9540N)',  params: { tipo: 'MOSFET_P', idss:23.000, vp: -3.000, gm: 9.300, rd:      0.117, configuracion: 'Potencia',    modo_operacion: 'Control de Motores' } },
-];
-
-
-/*  Regulador de voltaje                                         */
-export const MODELOS_REGULADOR = [
-  { value: 'LM7805',    label: 'Positivo Fijo 5V (LM7805)',       params: { tipo: 'Lineal Fijo',      voltaje_salida:   5.000, corriente_maxima: 1.500, voltaje_entrada_min:   7.000, voltaje_entrada_max:  35.000, dropout_voltage: 2.000, disipacion_maxima: 15.000, tolerancia: 4.00 } },
-  { value: 'LM340T-12', label: 'Positivo Fijo 12V (LM340T-12)',   params: { tipo: 'Lineal Fijo',      voltaje_salida:  12.000, corriente_maxima: 1.500, voltaje_entrada_min:  14.500, voltaje_entrada_max:  35.000, dropout_voltage: 2.000, disipacion_maxima: 15.000, tolerancia: 4.00 } },
-  { value: 'LM7905',    label: 'Negativo Fijo -5V (LM7905)',      params: { tipo: 'Lineal Fijo',      voltaje_salida:  -5.000, corriente_maxima: 1.500, voltaje_entrada_min:  -7.000, voltaje_entrada_max: -35.000, dropout_voltage: 2.000, disipacion_maxima: 15.000, tolerancia: 4.00 } },
-  { value: 'L7912',     label: 'Negativo Fijo -12V (L7912)',      params: { tipo: 'Lineal Fijo',      voltaje_salida: -12.000, corriente_maxima: 1.500, voltaje_entrada_min: -14.500, voltaje_entrada_max: -35.000, dropout_voltage: 2.000, disipacion_maxima: 15.000, tolerancia: 4.00 } },
-  { value: 'LM317',     label: 'Positivo Ajustable (LM317)',      params: { tipo: 'Lineal Ajustable', voltaje_salida:   1.250, corriente_maxima: 1.500, voltaje_entrada_min:   3.000, voltaje_entrada_max:  40.000, dropout_voltage: 3.000, disipacion_maxima: 20.000, tolerancia: 4.00 } },
-  { value: 'LM337',     label: 'Negativo Ajustable (LM337)',      params: { tipo: 'Lineal Ajustable', voltaje_salida:  -1.250, corriente_maxima: 1.500, voltaje_entrada_min:  -3.000, voltaje_entrada_max: -40.000, dropout_voltage: 3.000, disipacion_maxima: 20.000, tolerancia: 4.00 } },
-];
-
-/*  Diodos no-LED (Rectificadores + Zeners)                     */
-export const MODELOS_DIODO = [
-  { value: '1N4002',  label: 'Rectificador 100V (1N4002)',  params: { tipo: 'Rectificador', corriente_max: 1.000, voltaje_inv_max:  100.000, caida_tension: 0.700, rz:  0.00, is_saturacion: '1e-14' } },
-  { value: '1N4004',  label: 'Rectificador 400V (1N4004)',  params: { tipo: 'Rectificador', corriente_max: 1.000, voltaje_inv_max:  400.000, caida_tension: 0.700, rz:  0.00, is_saturacion: '1e-14' } },
-  { value: '1N4007',  label: 'Rectificador 1000V (1N4007)', params: { tipo: 'Rectificador', corriente_max: 1.000, voltaje_inv_max: 1000.000, caida_tension: 0.700, rz:  0.00, is_saturacion: '1e-14' } },
-  { value: '1N4728A', label: 'Zener 3.3V (1N4728A)',        params: { tipo: 'Zener',        corriente_max: 0.276, voltaje_inv_max:    3.300, caida_tension: 0.700, rz: 28.00, is_saturacion: '1e-14' } },
-  { value: '1N4733A', label: 'Zener 5.1V (1N4733A)',        params: { tipo: 'Zener',        corriente_max: 0.178, voltaje_inv_max:    5.100, caida_tension: 0.700, rz:  5.00, is_saturacion: '1e-14' } },
-  { value: '1N4742A', label: 'Zener 12V (1N4742A)',         params: { tipo: 'Zener',        corriente_max: 0.076, voltaje_inv_max:   12.000, caida_tension: 0.700, rz:  9.00, is_saturacion: '1e-14' } },
-];
-
-/*  LEDs — modelos con valores override-ables                   */
+/* Helpers */
 
 /**
- * Los LED tienen modelos predefinidos por color/categoria, pero el admin
- * PUEDE editar sus valores electricos (Vf, Imax) manualmente despues de
- * elegir el modelo.
+ * Extrae el codigo entre el ultimo par de parentesis del nombre.
  */
-export const MODELOS_LED = [
-  { value: 'ROJO',        label: 'LED Rojo Estándar 5mm',     params: { tipo: 'LED',              corriente_max: 0.020, voltaje_inv_max: 5.000, caida_tension: 1.700, rz: 0.00, is_saturacion: '1e-14' } },
-  { value: 'VERDE',       label: 'LED Verde Estándar 5mm',    params: { tipo: 'LED',              corriente_max: 0.020, voltaje_inv_max: 5.000, caida_tension: 2.200, rz: 0.00, is_saturacion: '1e-14' } },
-  { value: 'AMARILLO',    label: 'LED Amarillo Estándar 5mm', params: { tipo: 'LED',              corriente_max: 0.020, voltaje_inv_max: 5.000, caida_tension: 1.800, rz: 0.00, is_saturacion: '1e-14' } },
-  { value: 'AZUL',        label: 'LED Azul Estándar 5mm',     params: { tipo: 'LED',              corriente_max: 0.020, voltaje_inv_max: 5.000, caida_tension: 3.300, rz: 0.00, is_saturacion: '1e-14' } },
-  { value: 'BLANCO UB',   label: 'LED Blanco Ultrabrillante', params: { tipo: 'LED_Ultrabrillante', corriente_max: 0.030, voltaje_inv_max: 5.000, caida_tension: 3.300, rz: 0.00, is_saturacion: '1e-14' } },
-  { value: 'INFRARROJO',  label: 'LED Infrarrojo (IR) Tx',    params: { tipo: 'LED_IR',           corriente_max: 0.050, voltaje_inv_max: 5.000, caida_tension: 1.200, rz: 0.00, is_saturacion: '1e-14' } },
+function extraerCodigo(nombre) {
+  if (!nombre) return '';
+  const matches = [...String(nombre).matchAll(/\(([^()]+)\)/g)];
+  return matches.length > 0 ? matches[matches.length - 1][1].trim() : '';
+}
+
+/**
+ * Para LEDs, deriva un value desde el nombre.
+ */
+function extraerValueLED(nombre, fallbackId) {
+  if (!nombre) return `LED_${fallbackId ?? ''}`;
+  const limpio = String(nombre).replace(/^LED\s+/i, '').trim();
+  const palabras = limpio.split(/\s+/);
+  const primera = (palabras[0] ?? '').toUpperCase();
+  if (primera === 'BLANCO' && palabras[1]?.toLowerCase().startsWith('ultra')) {
+    return 'BLANCO UB';
+  }
+  return primera || `LED_${fallbackId ?? ''}`;
+}
+
+/** parseFloat seguro (devuelve 0 si no es numero). */
+function num(v) {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Categoriza los diodos: ¿es LED (cualquier subtipo)? */
+function esTipoLED(tipo) {
+  return tipo === 'LED' || tipo === 'LED_Ultrabrillante' || tipo === 'LED_IR';
+}
+
+/* Constructores por tipo */
+
+function construirModelosBJT(bjts = []) {
+  return bjts.map((b) => ({
+    value: extraerCodigo(b.componente_nombre) || `BJT_${b.id}`,
+    label: (b.componente_nombre ?? '').replace(/^Transistor\s+/i, ''),
+    params: {
+      tipo:                   b.tipo,
+      configuracion:          b.configuracion,
+      beta:                   num(b.beta),
+      vbe_saturacion:         num(b.vbe_saturacion),
+      vce_saturacion:         num(b.vce_saturacion),
+      corriente_colector_max: num(b.corriente_colector_max),
+      potencia_maxima:        num(b.potencia_maxima),
+      frecuencia_transicion:  num(b.frecuencia_transicion),
+      modo_operacion:         b.modo_operacion,
+    },
+  }));
+}
+
+function construirModelosFET(fets = []) {
+  return fets.map((f) => ({
+    value: extraerCodigo(f.componente_nombre) || `FET_${f.id}`,
+    label: (f.componente_nombre ?? '').replace(/^Transistor\s+/i, ''),
+    params: {
+      tipo:           f.tipo,
+      idss:           num(f.idss),
+      vp:             num(f.vp),
+      gm:             num(f.gm),
+      rd:             num(f.rd),
+      configuracion:  f.configuracion,
+      modo_operacion: f.modo_operacion,
+    },
+  }));
+}
+
+function construirModelosRegulador(regs = []) {
+  return regs.map((r) => ({
+    value: extraerCodigo(r.componente_nombre) || `REG_${r.id}`,
+    label: (r.componente_nombre ?? '').replace(/^Regulador\s+/i, ''),
+    params: {
+      tipo:                r.tipo,
+      voltaje_salida:      num(r.voltaje_salida),
+      corriente_maxima:    num(r.corriente_maxima),
+      voltaje_entrada_min: num(r.voltaje_entrada_min),
+      voltaje_entrada_max: num(r.voltaje_entrada_max),
+      dropout_voltage:     num(r.dropout_voltage),
+      disipacion_maxima:   num(r.disipacion_maxima),
+      tolerancia:          num(r.tolerancia),
+    },
+  }));
+}
+
+function construirModelosDiodo(diodos = []) {
+  return diodos
+    .filter((d) => !esTipoLED(d.tipo))
+    .map((d) => ({
+      value: extraerCodigo(d.componente_nombre) || `DIODO_${d.id}`,
+      label: (d.componente_nombre ?? '').replace(/^Diodo\s+/i, ''),
+      params: {
+        tipo:            d.tipo,
+        corriente_max:   num(d.corriente_max),
+        voltaje_inv_max: num(d.voltaje_inv_max),
+        caida_tension:   num(d.caida_tension),
+        rz:              num(d.rz),
+        is_saturacion:   d.is_saturacion ?? '1e-14',
+      },
+    }));
+}
+
+function construirModelosLED(diodos = []) {
+  return diodos
+    .filter((d) => esTipoLED(d.tipo))
+    .map((d) => ({
+      value: extraerValueLED(d.componente_nombre, d.id),
+      label: d.componente_nombre ?? '',
+      params: {
+        tipo:            d.tipo,
+        corriente_max:   num(d.corriente_max),
+        voltaje_inv_max: num(d.voltaje_inv_max),
+        caida_tension:   num(d.caida_tension),
+        rz:              num(d.rz),
+        is_saturacion:   d.is_saturacion ?? '1e-14',
+      },
+    }));
+}
+
+/* API pública del modulo */
+
+/**
+ * El admin elige una unidad sin filtrado por materia (decision de producto).
+ * El dropdown de "tema" filtra las categorías por:
+ *   - materia seleccionada
+ *   - prefijo numerico de la unidad tematica
+ */
+const UNIDADES_TEMATICAS_FALLBACK = [
+  { nombre: '1. Fundamentos de Circuitos Eléctricos' },
+  { nombre: '2. Análisis de Circuitos en Corriente Directa' },
+  { nombre: '3. Análisis del Circuito en el Dominio de la Frecuencia' },
+  { nombre: '1. Dispositivos Semiconductores' },
 ];
 
-/*  Helpers                                                      */
+/**
+ * Punto de entrada: transforma el JSON crudo del endpoint
+ *   GET /api/admin/circuitos-lista/componentes
+ * en la estructura de catálogos que consume el frontend.
+ *
+ * @param {object} raw - JSON crudo del backend
+ * @returns {{
+ *   MODELOS_BJT: Array,
+ *   MODELOS_FET: Array,
+ *   MODELOS_REGULADOR: Array,
+ *   MODELOS_DIODO: Array,
+ *   MODELOS_LED: Array,
+ *   categorias: Array<{id:number, nombre:string, materia:string}>,
+ *   unidades_tematicas: Array<{nombre:string}>,
+ *   unidades_medida: Array,
+ *   fuentes: object,
+ * }}
+ */
+export function construirCatalogosDesdeAPI(raw) {
+  const componentes = raw?.componentes ?? {};
+  const semis       = componentes.semiconductores ?? {};
+  const catalogos   = raw?.catalogos ?? {};
+
+  // El backend envia unidad_tematica  como array.
+  // Internamente lo guardamos como unidades_tematicas por claridad.
+  const unidadesDelBackend = catalogos.unidad_tematica;
+
+  return {
+    MODELOS_BJT:       construirModelosBJT(semis.transistores_bjt),
+    MODELOS_FET:       construirModelosFET(semis.transistores_fet),
+    MODELOS_REGULADOR: construirModelosRegulador(componentes.reguladores_voltaje),
+    MODELOS_DIODO:     construirModelosDiodo(semis.diodos),
+    MODELOS_LED:       construirModelosLED(semis.diodos),
+
+    categorias:         Array.isArray(catalogos.categorias) ? catalogos.categorias : [],
+    unidades_tematicas: Array.isArray(unidadesDelBackend) && unidadesDelBackend.length > 0
+                          ? unidadesDelBackend
+                          : UNIDADES_TEMATICAS_FALLBACK,
+    unidades_medida:    Array.isArray(catalogos.unidades_medida) ? catalogos.unidades_medida : [],
+    fuentes:            componentes.fuentes ?? {},
+  };
+}
+
 /**
  * Devuelve los params de un modelo dado su value.
  *
@@ -77,27 +193,33 @@ export const MODELOS_LED = [
  */
 export function paramsDeModelo(catalogo, value) {
   if (!value) return null;
-  const found = catalogo.find((m) => m.value === value);
+  const found = (catalogo ?? []).find((m) => m.value === value);
   return found ? { ...found.params } : null;
 }
 
 /**
- * Verifica si un value corresponde a un LED (cualquiera de los modelos).
- * Util para el ConstructorNetlist / PreviewSVG.
+ * Verifica si un value corresponde a un LED.
  *
+ * @param {Array} modelosLED - El array MODELOS_LED del catalogo cargado
  * @param {string} value
  * @returns {boolean}
  */
-export function esModeloLED(value) {
-  if (!value) return false;
-  return MODELOS_LED.some((m) => m.value === value);
+export function esModeloLED(modelosLED, value) {
+  if (!value || !Array.isArray(modelosLED)) return false;
+  return modelosLED.some((m) => m.value === value);
 }
 
 /**
- * Lista de catalogos por tipo de componente (para uso generico).
+ * Catalogo vacio inicial (placeholder mientras se carga).
  */
-export const CATALOGOS_POR_TIPO = {
-  transistor_bjt:    MODELOS_BJT,
-  transistor_fet:    MODELOS_FET,
-  regulador_voltaje: MODELOS_REGULADOR,
+export const CATALOGO_VACIO = {
+  MODELOS_BJT:        [],
+  MODELOS_FET:        [],
+  MODELOS_REGULADOR:  [],
+  MODELOS_DIODO:      [],
+  MODELOS_LED:        [],
+  categorias:         [],
+  unidades_tematicas: [],
+  unidades_medida:    [],
+  fuentes:            {},
 };

@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { ConstructorNetlist }       from './ConstructorNetlist';
 import { ListaComponentesAgrupada } from './FilaComponente';
 import { PreviewSVG }               from './PreviewSVG';
 import { circuitosAdminService }    from '../../../services/admin/circuitosAdminService';
+import { useCatalogoComponentes }   from './CatalogoComponentesContext';
 import { Circuit, ComponentFactory } from '../../../domain';
 import {
   colocarRelativoA,
@@ -14,6 +15,35 @@ import {
 
 const DIFICULTADES_DEFAULT = ['Básico', 'Intermedio', 'Avanzado'];
 
+/**
+ * Extrae el digito-prefijo de una unidad tematica y se filtran los temas (categorias)
+ * por convencion del nombre
+ */
+function prefijoUnidadTematica(uTematica) {
+  if (!uTematica) return null;
+  const match = String(uTematica).match(/^(\d+)\s*\./);
+  return match ? match[1] : null;
+}
+
+/**
+ * Serializacion del campo "tema": multi-seleccion en UI <-> string para backend.
+ *
+ * El backend guarda los temas como UN solo string, con cada tema en su propia
+ * linea.
+ *
+ * En el form mantenemos meta.tema como ese mismo string (compatibilidad
+ * con Circuit domain y backend); el array de seleccion se calcula al vuelo
+ * desde el string mediante temasFromString().
+ */
+function temasFromString(temaStr) {
+  if (!temaStr) return [];
+  return String(temaStr).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+}
+
+function temasToString(arr) {
+  return (arr ?? []).join('\n');
+}
+
 function validarCircuito(meta, componentes) {
   const errores = [];
   if (!meta.nombre?.trim())      errores.push('El nombre del circuito es obligatorio.');
@@ -21,7 +51,7 @@ function validarCircuito(meta, componentes) {
   if (!meta.dificultad)          errores.push('Selecciona una dificultad.');
   if (!meta.materia)             errores.push('Selecciona una materia.');
   if (!meta.unidad_tematica)     errores.push('Selecciona una unidad temática.');
-  if (!meta.tema?.trim())        errores.push('El tema es obligatorio.');
+  if (!meta.tema?.trim())        errores.push('Selecciona al menos un tema.');
   if (componentes.length === 0)  errores.push('Agrega al menos un componente a la netlist.');
 
   /* Validacion de al menos una fuente de alimentacion */
@@ -34,7 +64,6 @@ function validarCircuito(meta, componentes) {
         'El circuito no tiene fuente de alimentación. Agrega al menos una fuente de voltaje o de corriente.'
       );
     } else {
-      // Hay fuentes — verificar que al menos una este activa y con valor > 0
       const algunaUtil = fuentes.some((c) => {
         const activa = c.params?.activo ?? 1;
         const val = parseFloat(c.value);
@@ -78,8 +107,7 @@ function validarCircuito(meta, componentes) {
 }
 
 /**
- * Convierte una instancia Component al formato "admin" que entiende
- * ConstructorNetlist
+ * Convierte una instancia Component al formato "admin" que entiende ConstructorNetlist
  */
 function compToAdminForm(comp) {
   if (!comp) return null;
@@ -91,6 +119,14 @@ function compToAdminForm(comp) {
 
 /**
  * FormularioCircuito — Vista de creacion / edicion de circuito.
+ *
+ * Estructura de metadatos:
+ *   - materia          (string)    — dropdown con materias del catalogo
+ *   - unidad_tematica  (string)    — dropdown con las 4 unidades fijas del catalogo
+ *   - tema             (string)    — dropdown con categorias filtradas por:
+ *                                      * materia seleccionada
+ *                                      * prefijo numerico de la unidad tematica
+ *   - dificultad       (string)    — Basico / Intermedio / Avanzado
  */
 export function FormularioCircuito({
   modo = 'crear',
@@ -99,11 +135,15 @@ export function FormularioCircuito({
   onGuardar,
   onCancelar,
 }) {
-  const [catalogos, setCatalogos] = useState({
-    materias: [], unidades_tematicas: {}, temas: [], categorias: [], dificultades: [],
-  });
-  const [catLoading, setCatLoading] = useState(true);
-  const [catError,   setCatError]   = useState('');
+  const { catalogo, loading: catLoading, error: catError } = useCatalogoComponentes();
+  const { categorias: categoriasCatalogo, unidades_tematicas: unidadesTematicas } = catalogo;
+
+  /* Materias: se derivan de las categorias (cada categoria tiene su materia). */
+  const materias = useMemo(() => {
+    const set = new Set();
+    categoriasCatalogo.forEach((c) => { if (c.materia) set.add(c.materia); });
+    return [...set];
+  }, [categoriasCatalogo]);
 
   const circuitoNorm = circuitoInicial
     ? (circuitoInicial instanceof Circuit ? circuitoInicial : Circuit.fromAny(circuitoInicial))
@@ -116,7 +156,6 @@ export function FormularioCircuito({
     materia:         circuitoNorm?.materia ?? '',
     unidad_tematica: circuitoNorm?.unidad_tematica ?? '',
     tema:            circuitoNorm?.tema ?? '',
-    categorias:      circuitoNorm?.categorias ?? [],
   });
 
   const [componentes, setComponentes] = useState(() => {
@@ -135,22 +174,26 @@ export function FormularioCircuito({
   const previewRef = useRef(null);
   const builderRef = useRef(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setCatLoading(true);
-    setCatError('');
-    circuitosAdminService.obtenerCatalogos()
-      .then((data) => { if (!cancelled) setCatalogos(data); })
-      .catch((e) => { if (!cancelled) setCatError(e?.message ?? 'No se pudieron cargar los catálogos.'); })
-      .finally(() => { if (!cancelled) setCatLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
-
   const setField = (campo, val) => setMeta((m) => ({ ...m, [campo]: val }));
 
-  const unidadesDisponibles = meta.materia
-    ? (catalogos.unidades_tematicas[meta.materia] ?? [])
-    : [];
+  /**
+   * Temas disponibles para el dropdown actual.
+   * Convencion (por decision de producto):
+   *   - Filtrar por materia seleccionada.
+   *   - Filtrar por prefijo numerico de la unidad tematica
+   */
+  const temasDisponibles = useMemo(() => {
+    if (!meta.materia || !meta.unidad_tematica) return [];
+    const prefijo = prefijoUnidadTematica(meta.unidad_tematica);
+    return categoriasCatalogo.filter((cat) => {
+      if (cat.materia !== meta.materia) return false;
+      if (!prefijo) return true;
+      return String(cat.nombre ?? '').startsWith(`${prefijo}.`);
+    });
+  }, [categoriasCatalogo, meta.materia, meta.unidad_tematica]);
+
+  /** Array de temas actualmente seleccionados (derivado del string meta.tema). */
+  const temasSeleccionados = useMemo(() => temasFromString(meta.tema), [meta.tema]);
 
   const tiposComponentes = [...new Set(componentes.map((c) => c.type))];
 
@@ -178,11 +221,7 @@ export function FormularioCircuito({
     setComponentes((cs) =>
       cs.map((c) => {
         if (c.id !== rawComp.id) return c;
-        // Conserva la posicion actual del componente; el resto se reemplaza
-        return ComponentFactory.from({
-          ...rawComp,
-          position: c.position,
-        });
+        return ComponentFactory.from({ ...rawComp, position: c.position });
       })
     );
     setSelectedId(null);
@@ -208,7 +247,6 @@ export function FormularioCircuito({
 
   function handleEditarComp(id) {
     setSelectedId(id);
-    // Scroll suave hacia el builder
     if (id && builderRef.current) {
       builderRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -220,40 +258,53 @@ export function FormularioCircuito({
 
   /**
    * Cambia el nodo de un pin de un componente existente.
-   * Usa toJSON() para obtener el formato canonico y construye una nueva
-   * instancia con el nodo actualizado (inmutable).
-   *
-   * `pinAdmin` puede venir en formato admin (e.g. "a", "base", "vin")
-   * pero los nodes canonicos usan otras claves; el constructor del Component
-   * los normaliza automaticamente al pasar nodes con la clave admin.
    */
   function handleChangeNodo(compId, pinAdmin, nuevoNodo) {
     setComponentes((cs) =>
       cs.map((c) => {
         if (c.id !== compId) return c;
         const json = typeof c.toJSON === 'function' ? c.toJSON() : c;
-        // Buscamos el pinKey CANONICO que corresponde al pinAdmin recibido.
-        // El constructor de Component normaliza claves, asi que pasamos
-        // tanto las canonicas existentes como un override con la clave admin.
         const nodesActuales = json.nodes ?? {};
         const nodes = {};
         Object.entries(nodesActuales).forEach(([k, v]) => {
           nodes[k] = { ...v };
         });
-        // Sobreescribimos con la clave admin (Component la resolvera a canonical)
         nodes[pinAdmin] = { nodo: String(nuevoNodo ?? '').trim(), x: null, y: null };
         return ComponentFactory.from({ ...json, nodes });
       })
     );
   }
 
-  function toggleCategoria(cat) {
+  /* Handlers de cascada para los dropdowns */
+
+  function handleMateriaChange(nuevaMateria) {
     setMeta((m) => ({
       ...m,
-      categorias: m.categorias.includes(cat)
-        ? m.categorias.filter((c) => c !== cat)
-        : [...m.categorias, cat],
+      materia: nuevaMateria,
+      tema: '',
     }));
+  }
+
+  function handleUnidadTematicaChange(nuevaUnidad) {
+    setMeta((m) => ({
+      ...m,
+      unidad_tematica: nuevaUnidad,
+      tema: '',
+    }));
+  }
+
+  /**
+   * Agrega o quita un tema de la seleccion. Internamente meta.tema se
+   * mantiene como un string con saltos de linea para enviar al backend.
+   */
+  function toggleTema(nombreTema) {
+    setMeta((m) => {
+      const arr = temasFromString(m.tema);
+      const nuevoArr = arr.includes(nombreTema)
+        ? arr.filter((t) => t !== nombreTema)
+        : [...arr, nombreTema];
+      return { ...m, tema: temasToString(nuevoArr) };
+    });
   }
 
   async function handleGuardar() {
@@ -296,6 +347,16 @@ export function FormularioCircuito({
     ? compToAdminForm(componentes.find((c) => c.id === selectedId))
     : null;
 
+  /* Hints para los dropdowns */
+
+  const hintTema = !meta.materia
+    ? 'Selecciona una materia primero.'
+    : !meta.unidad_tematica
+      ? 'Selecciona una unidad temática primero.'
+      : temasDisponibles.length === 0
+        ? 'No hay temas disponibles para esta combinación de materia + unidad temática.'
+        : null;
+
   return (
     <div className="admin-two-panel">
       <div className="admin-left-panel">
@@ -336,21 +397,19 @@ export function FormularioCircuito({
             <Field label="dificultad">
               <select className="admin-select"
                 value={meta.dificultad}
-                onChange={(e) => setField('dificultad', e.target.value)}
-                disabled={catLoading}>
-                <option value="">{catLoading ? 'Cargando…' : '— Seleccionar —'}</option>
-                {(catalogos.dificultades.length > 0 ? catalogos.dificultades : DIFICULTADES_DEFAULT)
-                  .map((d) => <option key={d} value={d}>{d}</option>)}
+                onChange={(e) => setField('dificultad', e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {DIFICULTADES_DEFAULT.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </Field>
 
             <Field label="materia">
               <select className="admin-select"
                 value={meta.materia}
-                onChange={(e) => { setField('materia', e.target.value); setField('unidad_tematica', ''); }}
+                onChange={(e) => handleMateriaChange(e.target.value)}
                 disabled={catLoading}>
                 <option value="">{catLoading ? 'Cargando…' : '— Seleccionar —'}</option>
-                {catalogos.materias.map((m) => <option key={m} value={m}>{m}</option>)}
+                {materias.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </Field>
           </div>
@@ -358,30 +417,41 @@ export function FormularioCircuito({
           <Field label="unidad_tematica">
             <select className="admin-select"
               value={meta.unidad_tematica}
-              onChange={(e) => setField('unidad_tematica', e.target.value)}
-              disabled={!meta.materia}>
-              <option value="">— Seleccionar materia primero —</option>
-              {unidadesDisponibles.map((u) => <option key={u} value={u}>{u}</option>)}
+              onChange={(e) => handleUnidadTematicaChange(e.target.value)}
+              disabled={catLoading}>
+              <option value="">{catLoading ? 'Cargando…' : '— Seleccionar unidad temática —'}</option>
+              {unidadesTematicas.map((u) => (
+                <option key={u.nombre} value={u.nombre}>{u.nombre}</option>
+              ))}
             </select>
           </Field>
 
           <Field label="tema">
-            <textarea className="admin-textarea"
-              value={meta.tema}
-              onChange={(e) => setField('tema', e.target.value)}
-              rows={2} placeholder="ej: 1. Ley de Ohm&#10;2. Divisor de Voltaje" />
-          </Field>
-
-          <Field label="categorias">
-            <div className="admin-chip-container">
-              {catalogos.categorias.map((cat) => (
-                <button key={cat} type="button"
-                  className={`admin-chip ${meta.categorias.includes(cat) ? 'admin-chip--selected' : ''}`}
-                  onClick={() => toggleCategoria(cat)}>
-                  {cat}
-                </button>
-              ))}
-            </div>
+            {catLoading ? (
+              <p className="admin-input-hint">Cargando temas…</p>
+            ) : hintTema ? (
+              <p className="admin-input-hint">{hintTema}</p>
+            ) : (
+              <>
+                <div className="admin-chip-container">
+                  {temasDisponibles.map((cat) => {
+                    const seleccionado = temasSeleccionados.includes(cat.nombre);
+                    return (
+                      <button key={cat.id} type="button"
+                        className={`admin-chip ${seleccionado ? 'admin-chip--selected' : ''}`}
+                        onClick={() => toggleTema(cat.nombre)}>
+                        {cat.nombre}
+                      </button>
+                    );
+                  })}
+                </div>
+                {temasSeleccionados.length > 0 && (
+                  <p className="admin-input-hint" style={{ marginTop: 6 }}>
+                    {temasSeleccionados.length} tema{temasSeleccionados.length !== 1 ? 's' : ''} seleccionado{temasSeleccionados.length !== 1 ? 's' : ''}.
+                  </p>
+                )}
+              </>
+            )}
           </Field>
 
           <Field label="tipos_componentes (generado automáticamente)">

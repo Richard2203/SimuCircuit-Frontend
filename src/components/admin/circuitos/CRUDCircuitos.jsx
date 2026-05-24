@@ -5,10 +5,7 @@ import { ModalConfirmacion }     from '../shared/ModalConfirmacion';
 import { circuitosAdminService } from '../../../services/admin/circuitosAdminService';
 
 /**
- * CRUDCircuitos — Pestaña 2 del panel admin: alta/edicion de circuitos.
- *
- * `circuitosAdminService.obtenerCircuitos()` devuelve `Circuit[]`,
- * y `obtenerCircuitoPorId()` devuelve `{ circuito: Circuit, netlist: Component[] }`.
+ * CRUDCircuitos
  */
 export function CRUDCircuitos() {
   const [circuitos,        setCircuitos]    = useState([]);
@@ -60,7 +57,9 @@ export function CRUDCircuitos() {
         handleNuevo();
       }
       cargarLista();
-    } catch { alert('Error al eliminar.'); }
+    } catch (err) {
+      alert(err?.message ?? 'Error al eliminar el circuito.');
+    }
   }
 
   function handleGuardado() {
