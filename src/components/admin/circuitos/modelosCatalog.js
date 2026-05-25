@@ -46,6 +46,7 @@ function construirModelosBJT(bjts = []) {
     value: extraerCodigo(b.componente_nombre) || `BJT_${b.id}`,
     label: (b.componente_nombre ?? '').replace(/^Transistor\s+/i, ''),
     params: {
+      componente_id:          b.componente_id,
       tipo:                   b.tipo,
       configuracion:          b.configuracion,
       beta:                   num(b.beta),
@@ -64,6 +65,7 @@ function construirModelosFET(fets = []) {
     value: extraerCodigo(f.componente_nombre) || `FET_${f.id}`,
     label: (f.componente_nombre ?? '').replace(/^Transistor\s+/i, ''),
     params: {
+      componente_id:  f.componente_id,
       tipo:           f.tipo,
       idss:           num(f.idss),
       vp:             num(f.vp),
@@ -80,6 +82,7 @@ function construirModelosRegulador(regs = []) {
     value: extraerCodigo(r.componente_nombre) || `REG_${r.id}`,
     label: (r.componente_nombre ?? '').replace(/^Regulador\s+/i, ''),
     params: {
+      componente_id:       r.componente_id,
       tipo:                r.tipo,
       voltaje_salida:      num(r.voltaje_salida),
       corriente_maxima:    num(r.corriente_maxima),
@@ -99,6 +102,7 @@ function construirModelosDiodo(diodos = []) {
       value: extraerCodigo(d.componente_nombre) || `DIODO_${d.id}`,
       label: (d.componente_nombre ?? '').replace(/^Diodo\s+/i, ''),
       params: {
+        componente_id:   d.componente_id,
         tipo:            d.tipo,
         corriente_max:   num(d.corriente_max),
         voltaje_inv_max: num(d.voltaje_inv_max),
@@ -116,6 +120,7 @@ function construirModelosLED(diodos = []) {
       value: extraerValueLED(d.componente_nombre, d.id),
       label: d.componente_nombre ?? '',
       params: {
+        componente_id:   d.componente_id,
         tipo:            d.tipo,
         corriente_max:   num(d.corriente_max),
         voltaje_inv_max: num(d.voltaje_inv_max),
@@ -126,7 +131,7 @@ function construirModelosLED(diodos = []) {
     }));
 }
 
-/* API pública del modulo */
+/* API publica del modulo */
 
 /**
  * El admin elige una unidad sin filtrado por materia (decision de producto).

@@ -318,20 +318,116 @@ export class Circuit {
    * @returns {object}
    */
   toBackendPayload() {
+    // Tipos preexistentes en BD: solo se instancian, no se crea un nuevo componente
+    const TIPOS_PREEXISTENTES = new Set([
+      'diodo', 'regulador_voltaje', 'transistor_bjt', 'transistor_fet',
+    ]);
+
+    // Mapa de params del dominio (claves frontend) -> claves del backend por tipo
+    const mapParamsToBackend = (tipo, params) => {
+      switch (tipo) {
+        case 'resistencia':
+        case 'resistencia_variable':
+          return {
+            banda_uno:            params.banda_uno         ?? '',
+            banda_dos:            params.banda_dos         ?? '',
+            banda_tres:           params.banda_tres        ?? '',
+            banda_tolerancia:     params.banda_tolerancia  ?? '',
+            potencia_nominal:     params.potencia_nominal  ?? 0.25,
+            isResistenciaVariable: tipo === 'resistencia_variable' ? 1 : 0,
+          };
+        case 'capacitor':
+          return {
+            tipo_dioelectrico: params.tipo_dioelectrico ?? 'Cerámico',
+            voltaje:           params.voltaje           ?? 0,
+            polaridad:         params.polaridad         ?? null,
+          };
+        case 'bobina':
+          return {
+            corriente_max:  params.corriente_max  ?? 0,
+            resistencia_dc: params.resistencia_dc ?? 0,
+          };
+        case 'fuente_voltaje':
+          return {
+            tipo_senial:   params.dcOrAc       === 'ac' ? 'AC' : 'DC',
+            frecuencia:    params.frequency    ?? 0,
+            fase:          params.phase        ?? 0,
+            activo:        params.activo       ?? 1,
+            corriente_max: params.corriente_max ?? 2,
+          };
+        case 'fuente_corriente':
+          return {
+            tipo_senial: params.dcOrAc    === 'ac' ? 'AC' : 'DC',
+            frecuencia:  params.frequency ?? 0,
+            fase:        params.phase     ?? 0,
+            activo:      params.activo    ?? 1,
+            voltaje_max: params.voltaje_max ?? 30,
+          };
+        default:
+          return undefined; // tipos preexistentes no necesitan detalles
+      }
+    };
+
+    // Serializar cada componente al formato que espera el backend
+    const componentes = this.netlist.map((comp) => {
+      const json      = comp.toJSON();
+      const esPre     = TIPOS_PREEXISTENTES.has(json.type);
+      const detalles  = mapParamsToBackend(json.type, json.params ?? {});
+
+      const base = {
+        nombre:          json.id,           // designador actua como nombre (R1, C1...)
+        tipo:            json.type,
+        valor:           json.value,
+        unidad_medida_id: json.params?.unidad_medida_id ?? null,
+        designador:      json.id,
+        posicion_x:      json.position?.x ?? 0,
+        posicion_y:      json.position?.y ?? 0,
+        rotacion:        json.rotation     ?? 0,
+      };
+
+      if (esPre) {
+        // componente_id llega en params para los preexistentes (diodo, transistores...)
+        base.componente_id = json.params?.componente_id ?? json.params?.id ?? null;
+      } else if (detalles) {
+        base.detalles = detalles;
+      }
+
+      return base;
+    });
+
+    // Serializar nodos: cada pin de cada componente -> una entrada de nodo
+    const nodos = [];
+    this.netlist.forEach((comp) => {
+      const json = comp.toJSON();
+      Object.entries(json.nodes ?? {}).forEach(([pinKey, pinData]) => {
+        if (!pinData?.nodo && pinData?.nodo !== 0) return; // pin sin nodo asignado
+        nodos.push({
+          numero_nodo:  String(pinData.nodo),
+          designador:   json.id,
+          pin_terminal: pinKey,
+          posicion_x:   pinData.x ?? json.position?.x ?? 0,
+          posicion_y:   pinData.y ?? json.position?.y ?? 0,
+        });
+      });
+    });
+
     return {
       circuito: {
-        nombre_circuito:   this.nombre,
-        descripcion:       this.descripcion,
-        dificultad:        this.dificultad,
-        materia:           this.materia,
-        unidad_tematica:   this.unidad_tematica,
-        tema:              this.tema,
-        tipo:              this.tipo,
-        categorias:        [...this.categorias],
-        tipos_componentes: [...this.tipos_componentes],
+        nombre:          this.nombre,
+        descripcion:     this.descripcion,
+        dificultad:      this.dificultad,
+        materia:         this.materia,
+        unidad_tematica: this.unidad_tematica,
+        tema:            this.tema,
+        tipo:            this.tipo,
+        activo:          this.activo ? 1 : 0,
+        miniatura_svg:   this.miniatura_svg,
+        // categorias: array de IDs numericos — se inyecta desde el servicio
+        // porque el domain no conoce el catalogo; ver circuitosAdminService
+        categorias: this.categorias,
       },
-      netlist:       this.netlist.map((c) => c.toBackendJSON()),
-      miniatura_svg: this.miniatura_svg,
+      componentes,
+      nodos,
     };
   }
 }

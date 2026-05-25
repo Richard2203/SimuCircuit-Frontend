@@ -318,8 +318,19 @@ export function FormularioCircuito({
       const svgEl  = previewRef.current?.querySelector('svg');
       const svgStr = svgEl ? new XMLSerializer().serializeToString(svgEl) : '<svg/>';
 
+      // Resolver IDs numericos de las categorias seleccionadas.
+      // temasSeleccionados contiene nombres (strings); los cruzamos con
+      // categoriasCatalogo para obtener sus IDs antes de construir el Circuit.
+      const categoriasIds = temasSeleccionados
+        .map((nombre) => {
+          const cat = categoriasCatalogo.find((c) => c.nombre === nombre);
+          return cat?.id ?? null;
+        })
+        .filter((id) => id != null);
+
       const circuit = new Circuit({
         ...meta,
+        categorias:        categoriasIds,
         tipos_componentes: tiposComponentes,
         netlist:           componentes,
         miniatura_svg:     svgStr,
@@ -327,7 +338,7 @@ export function FormularioCircuito({
 
       if (modo === 'editar' && circuitoNorm?.id) {
         await circuitosAdminService.editarCircuito({
-          id:            circuitoNorm.id,
+          id: circuitoNorm.id,
           ...circuit.toBackendPayload(),
         });
       } else {

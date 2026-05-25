@@ -7,14 +7,15 @@ import { Circuit }                    from '../../domain';
  * circuitosAdminService — Capa de servicios para el CRUD admin de circuitos.
  */
 
-const OVERRIDES_KEY = 'admin_mock_circuitos_overrides';
+// LOCAL_ID_BASE se mantiene solo para que obtenerCircuitos / obtenerCircuitoPorId
+// puedan distinguir IDs reales de IDs legacy guardados en localStorage.
 const LOCAL_ID_BASE = 100000;
 
-/* Storage helpers (mock CRUD) */
+/* Storage helpers (solo lectura de overrides legacy — escritura migrada al backend) */
 
 function readOverrides() {
   try {
-    const raw = localStorage.getItem(OVERRIDES_KEY);
+    const raw = localStorage.getItem('admin_mock_circuitos_overrides');
     if (raw) {
       const o = JSON.parse(raw);
       return {
@@ -24,16 +25,6 @@ function readOverrides() {
     }
   } catch { /* ignore */ }
   return { created: [], edited: {} };
-}
-
-function writeOverrides(o) {
-  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)); }
-  catch { /* ignore */ }
-}
-
-function nextLocalId(overrides) {
-  const max = overrides.created.reduce((m, c) => Math.max(m, c.id ?? 0), LOCAL_ID_BASE - 1);
-  return max + 1;
 }
 
 /* API: LECTURAS */
@@ -92,7 +83,7 @@ async function obtenerCircuitoPorId(id) {
     return { circuito: circuit, netlist: circuit.netlist };
   }
 
-  // Caso B: circuito real, posiblemente parchado por un edit local
+  // Caso B: circuito real
   const real = await CircuitosService.getCircuitoById(numId);
   const edit = overrides.edited[numId];
 
@@ -147,69 +138,102 @@ async function obtenerCatalogos() {
   };
 }
 
-/* API: ESCRITURAS (mock) */
+/* API: ESCRITURAS */
+
 /**
- * Crea un circuito. Acepta tanto Circuit como JSON crudo.
+ * Resuelve `categorias` a un array de IDs numericos.
+ * El payload de toBackendPayload() lleva circuit.categorias que puede ser:
+ *   - array de números  [2, 5]               -> ya listo
+ *   - array de strings con nombres de temas  -> buscar en catalogo
+ *   - array de objetos { id, nombre }        -> extraer id
  *
- * @param {{ circuito: object, netlist: Array, miniatura_svg?: string } | Circuit} arg
+ * @param {Array} categorias
+ * @param {Array<{id:number, nombre:string}>} catalogoCategorias
+ * @returns {number[]}
  */
-async function crearCircuito(arg) {
-  await new Promise((r) => setTimeout(r, 250));
-  const overrides = readOverrides();
-
-  let circuit;
-  if (arg instanceof Circuit) {
-    circuit = arg;
-  } else {
-    circuit = new Circuit({
-      ...(arg.circuito ?? {}),
-      nombre:        arg.circuito?.nombre_circuito ?? arg.circuito?.nombre ?? '',
-      netlist:       arg.netlist ?? [],
-      miniatura_svg: arg.miniatura_svg ?? '<svg/>',
-    });
-  }
-
-  const id   = nextLocalId(overrides);
-  const json = { ...circuit.toJSON(), id };
-  overrides.created.push(json);
-  writeOverrides(overrides);
-  return { id };
+function resolverCategoriasIds(categorias, catalogoCategorias = []) {
+  if (!Array.isArray(categorias) || categorias.length === 0) return [];
+  return categorias
+    .map((cat) => {
+      if (typeof cat === 'number') return cat;
+      if (typeof cat === 'string') {
+        const found = catalogoCategorias.find((c) => c.nombre === cat);
+        return found ? found.id : null;
+      }
+      if (cat && typeof cat === 'object' && cat.id != null) return Number(cat.id);
+      return null;
+    })
+    .filter((id) => id != null && !Number.isNaN(id));
 }
 
 /**
- * Edita un circuito existente.
+ * Obtiene el catalogo de categorias (con cache inline para no hacer 2 fetches
+ * en la misma operacion crear/editar).
+ */
+async function fetchCatalogoCategorias() {
+  try {
+    const raw = await catalogoComponentesService.fetchCatalogoCrudo();
+    return raw?.catalogos?.categorias ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Normaliza el arg al payload { circuito, componentes, nodos } que espera el backend.
+ * Resuelve las categorias a IDs numericos.
  *
- * @param {{ id: number|string, circuito: object, netlist: Array, miniatura_svg?: string } | (Circuit & { id: number|string })} arg
+ * @param {{ circuito: object, componentes: Array, nodos: Array } | Circuit} arg
+ * @param {Array<{id:number, nombre:string}>} catalogoCategorias
+ * @returns {object}
+ */
+function normalizarPayload(arg, catalogoCategorias) {
+  const payload = arg instanceof Circuit ? arg.toBackendPayload() : arg;
+  return {
+    ...payload,
+    circuito: {
+      ...payload.circuito,
+      categorias: resolverCategoriasIds(
+        payload.circuito?.categorias ?? [],
+        catalogoCategorias
+      ),
+    },
+  };
+}
+
+/**
+ * Crea un circuito en el backend.
+ *
+ * @param {{ circuito: object, componentes: Array, nodos: Array } | Circuit} arg
+ * @returns {Promise<{ id: number }>}
+ */
+async function crearCircuito(arg) {
+  const catalogoCategorias = await fetchCatalogoCategorias();
+  const payload = normalizarPayload(arg, catalogoCategorias);
+  const res = await apiClient.post('/api/admin/crearCircuito', payload);
+  return { id: res?.circuito_id ?? res?.id ?? null };
+}
+
+/**
+ * Edita un circuito existente en el backend.
+ *
+ * @param {{ id: number|string, circuito: object, componentes: Array, nodos: Array } | (Circuit & { id: number|string })} arg
+ * @returns {Promise<{ mensaje: string }>}
  */
 async function editarCircuito(arg) {
-  await new Promise((r) => setTimeout(r, 200));
-  const overrides = readOverrides();
-
-  const id = Number(arg.id);
-  let circuit;
-  if (arg instanceof Circuit) {
-    circuit = arg;
-  } else {
-    circuit = new Circuit({
-      ...(arg.circuito ?? {}),
-      nombre:        arg.circuito?.nombre_circuito ?? arg.circuito?.nombre ?? '',
-      netlist:       arg.netlist ?? [],
-      miniatura_svg: arg.miniatura_svg ?? '<svg/>',
-    });
+  const numId = Number(arg.id);
+  if (!numId || numId <= 0) {
+    throw Object.assign(new Error('ID de circuito inválido para editar.'), { status: 400 });
   }
-  const datos = circuit.toJSON();
 
-  if (id >= LOCAL_ID_BASE) {
-    const idx = overrides.created.findIndex((c) => c.id === id);
-    if (idx === -1) {
-      throw Object.assign(new Error('Circuito local no encontrado.'), { status: 404 });
-    }
-    overrides.created[idx] = { ...overrides.created[idx], ...datos, id };
-  } else {
-    overrides.edited[id] = datos;
-  }
-  writeOverrides(overrides);
-  return { mensaje: 'Circuito actualizado correctamente.' };
+  const catalogoCategorias = await fetchCatalogoCategorias();
+  const payload = normalizarPayload(arg, catalogoCategorias);
+
+  // Quitar id del payload raiz (ya va en la URL)
+  const { id: _id, ...payloadSinId } = payload;
+
+  const res = await apiClient.put(`/api/admin/modificarCircuito/${numId}`, payloadSinId);
+  return { mensaje: res?.mensaje ?? 'Circuito actualizado correctamente.' };
 }
 
 /**
@@ -221,30 +245,31 @@ async function eliminarCircuito({ id }) {
   const numId     = Number(id);
   const overrides = readOverrides();
 
-  // Caso A: circuito creado localmente con el mock -> quitar de localStorage
+  // Caso A: circuito creado localmente con el mock legacy -> quitar de localStorage
   if (numId >= LOCAL_ID_BASE) {
     overrides.created = overrides.created.filter((c) => c.id !== numId);
-    writeOverrides(overrides);
+    try { localStorage.setItem('admin_mock_circuitos_overrides', JSON.stringify(overrides)); }
+    catch { /* ignore */ }
     return { mensaje: 'Circuito eliminado correctamente.' };
   }
 
   // Caso B: circuito real -> endpoint del backend.
-  // apiClient lanza ApiError si falla y propagamos.
   await apiClient.delete(`/api/admin/eliminarCircuito/${numId}`);
 
   // Limpiar cualquier edit-override mock viejo para ese id.
   if (overrides.edited[numId]) {
     delete overrides.edited[numId];
-    writeOverrides(overrides);
+    try { localStorage.setItem('admin_mock_circuitos_overrides', JSON.stringify(overrides)); }
+    catch { /* ignore */ }
   }
 
   return { mensaje: 'Circuito eliminado correctamente.' };
 }
 
-/* Helper de debug */
+/* Helper de debug: limpia overrides legacy del localStorage */
 
 export function _resetMockOverrides() {
-  try { localStorage.removeItem(OVERRIDES_KEY); }
+  try { localStorage.removeItem('admin_mock_circuitos_overrides'); }
   catch { /* ignore */ }
 }
 
