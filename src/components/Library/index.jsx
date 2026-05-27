@@ -226,7 +226,10 @@ export function Library({ state, dispatch, api }) {
 
       <div className="page-container">
         <header className="hero">
-          <h1 className="hero-logo">SimuCircuit</h1>
+          <h1 className="hero-logo">
+            <img src="../src/assets/transistor.png" alt="SimuCircuit logo" className="hero-logo-img" />
+            SimuCircuit
+          </h1>
           <p className="hero-sub">
             Simulador de circuitos eléctricos interactivo.
             Explora, aprende y experimenta con decenas de circuitos diferentes.

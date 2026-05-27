@@ -94,7 +94,12 @@ body {
   text-align: center;
   padding: var(--sp-12) 0 var(--sp-8);
 }
+
 .hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
   font-size: 38px;
   font-weight: 700;
   background: linear-gradient(135deg, #a78bfa 0%, #6c63ff 100%);
@@ -103,6 +108,12 @@ body {
   margin-bottom: var(--sp-3);
   letter-spacing: -0.5px;
 }
+
+.hero-logo-img {
+  height: 1em;
+  width: auto;
+}
+
 .hero-sub {
   color: var(--text-muted);
   font-size: 15px;
