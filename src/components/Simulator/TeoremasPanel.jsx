@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { formatValue } from './models/ComponentValueLabel.jsx';
 
 /* Helpers de formato */
@@ -105,9 +105,17 @@ function PasoFormula({ paso }) {
 export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
   const [compId, setCompId]     = useState('');
   const [parametro, setParametro] = useState('voltaje');
+  const [calculoActivo, setCalculoActivo] = useState({ compId: '', parametro: 'voltaje' });
+
+  // Estado para guardar el estado de lo que se usó para el cálculo actual
+  const calculoPendiente = useRef(null);
 
   const handleSubmit = () => {
     if (!compId.trim()) return;
+
+    //Guardamos los valores exactos en el momento de darle clic a calcular
+    calculoPendiente.current = { compId: compId.trim(), parametro };
+
     if (tipo === 'thevenin-norton') {
       onCalcular(compId.trim());
     } else {
@@ -115,6 +123,17 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
     }
   };
 
+  // Efecto que escucha los cambios de estado de la API (onCalcular)
+  useEffect(() => {
+    // Si terminó de cargar, NO hay error, y tenemos un cálculo pendiente en espera.
+    if (!loading && !error && resultado && calculoPendiente.current) {
+      // Entonces actualizamos el cálculo activo con los valores del cálculo pendiente.
+      setCalculoActivo(calculoPendiente.current);
+      // Y limpiamos el cálculo pendiente.
+      calculoPendiente.current = null;
+    }
+    // Si hay error, useEffect no hace nada, conservando el estado anterior
+  }, [loading, error, resultado]);
   return (
     <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {/* Formulario de entrada */}
@@ -126,6 +145,7 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
           <input
             value={compId}
             onChange={(e) => setCompId(e.target.value)}
+            onKeyUp= {(e) => setCompId(e.target.value.toUpperCase())}
             placeholder={tipo === 'thevenin-norton' ? 'ej. RL' : 'ej. R3'}
             style={{
               background: '#1e1e2e',
@@ -201,15 +221,15 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {/* Backend devuelve: { total, aportaciones, procedimiento } */}
           <ResultRow
-            label={`${parametro === 'voltaje' ? 'V' : 'I'} total en ${compId}`}
-            value={fmtAuto(resultado.total ?? 0, parametro === 'voltaje' ? 'V' : 'A')}
+            label={`${calculoActivo.parametro === 'voltaje' ? 'V' : 'I'} total en ${calculoActivo.compId}`}
+            value={fmtAuto(resultado.total ?? 0, calculoActivo.parametro === 'voltaje' ? 'V' : 'A')}
             color="#fbbf24"
           />
           {resultado.aportaciones?.map((ap) => (
             <ResultRow
               key={ap.fuenteId}
               label={`Aporte de ${ap.fuenteId}`}
-              value={fmtAuto(ap.valorAporte ?? 0, parametro === 'voltaje' ? 'V' : 'A')}
+              value={fmtAuto(ap.valorAporte ?? 0, calculoActivo.parametro === 'voltaje' ? 'V' : 'A')}
               color="#4ade80"
             />
           ))}

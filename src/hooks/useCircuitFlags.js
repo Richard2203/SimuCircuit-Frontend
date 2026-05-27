@@ -33,11 +33,11 @@ export function useCircuitFlags(circuit, netlist) {
   // resultado correcto es Zeq(w), no un escalar.
   const showNodal           = circuit.tieneDC;
   const showTransientPanel  = circuit.tieneDC && (cc.C > 0 || cc.L > 0);
-  const showGeneral         = cc.R > 0 && (circuit.tieneDC || (cc.C === 0 && cc.L === 0));
+  const showGeneral         = circuit.tieneDC && cc.R > 0 && !hasNonLinear; // Corregido para que solo salga en analisis DC y sin componentes no lineales
   const showLaws            = true;
   const showThevenin        = circuit.tieneDC && cc.R >= 2 && !hasActiveNL;
   const showSuperposition   = circuit.tieneDC && dcSourceCount >= 2;
-  const showSourceTransform = circuit.tieneDC && dcSourceCount === 1 && cc.R >= 1 && !hasActiveNL;
+  const showSourceTransform = circuit.tieneDC && cc.R >= 1 && !hasActiveNL;
 
   return {
     hasDCVoltageSrc,
