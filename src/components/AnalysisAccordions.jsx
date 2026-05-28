@@ -67,14 +67,14 @@ export function AnalysisAccordions({
         />
       )}
 
-      {flags.showTransientPanel && accordion('transitorio', 'Análisis Transitorio', '∿',
+      {/* {flags.showTransientPanel && accordion('transitorio', 'Análisis Transitorio', '∿',
         <TransientPanel
           resultado={analisisResultado?.tipo === 'transitorio' ? analisisResultado : null}
           loading={loading?.analisisTransitorio}
           hasReactives
           onCalculate={(cfg) => api.calcularTransitorio(cfg)}
         />
-      )}
+      )} */}
 
       {flags.showGeneral && accordion('general', 'Cálculos Generales', 'Σ',
         <GeneralPanel
