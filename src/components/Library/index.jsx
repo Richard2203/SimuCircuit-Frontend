@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { FilterPanel } from '../FilterPanel';
 import { CircuitCard } from '../CircuitCard';
 import { Circuit }     from '../../domain';
+import transistorImg from '../../assets/transistor.png';
 
 const MAX_VISIBLE = 32;
 
@@ -227,7 +228,7 @@ export function Library({ state, dispatch, api }) {
       <div className="page-container">
         <header className="hero">
           <h1 className="hero-logo">
-            <img src="../src/assets/transistor.png" alt="SimuCircuit logo" className="hero-logo-img" />
+            <img src={transistorImg} alt="SimuCircuit logo" className="hero-logo-img" />
             SimuCircuit
           </h1>
           <p className="hero-sub">
