@@ -31,10 +31,12 @@ export function AnalysisAccordions({
   circuit, state, dispatch, api,
   netlist, analisisResultado, teoremaResultado,
   simResultadoDC, procedimientoDC, procedimientoAC, procedimientoTRAN,
-  loading, simError, analisisError,
+  loading, simError, analisisError, teoremaErrorTipo,
 }) {
   const flags = useCircuitFlags(circuit, netlist);
   const cc    = circuit.componentCounts;
+
+  const teoremaError = (tipo) => (teoremaErrorTipo === tipo ? simError : null);
 
   // Resultado de divisor (voltaje o corriente)
   const divResult =
@@ -104,7 +106,7 @@ export function AnalysisAccordions({
           tipo="thevenin-norton"
           resultado={teoremaResultado?.tipo === 'thevenin-norton' ? teoremaResultado : null}
           loading={loading?.teorema}
-          error={simError}
+          error={teoremaError('thevenin-norton')}
           onCalcular={(componenteCargaId) => api.calcularTheveninNorton({ componenteCargaId })}
         />
       )}
@@ -114,7 +116,7 @@ export function AnalysisAccordions({
           tipo="superposicion"
           resultado={teoremaResultado?.tipo === 'superposicion' ? teoremaResultado : null}
           loading={loading?.teorema}
-          error={simError}
+          error={teoremaError('superposicion')}
           onCalcular={(componenteObjetivoId, parametroAnalisis) =>
             api.calcularSuperposicion({ componenteObjetivoId, parametroAnalisis })
           }
@@ -125,7 +127,7 @@ export function AnalysisAccordions({
         <SourceTransformPanel
           resultado={teoremaResultado?.tipo === 'transformacion-fuente' ? teoremaResultado : null}
           loading={loading?.teorema}
-          error={simError}
+          error={teoremaError('transformacion-fuente')}
           netlist={netlist}
           onCalculate={(fuenteId) => api.calcularTransformacionFuente({ fuenteId })}
         />

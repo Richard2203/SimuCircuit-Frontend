@@ -1,3 +1,4 @@
+
 /**
  * Paneles de analisis para cada AccordionSection.
  * Cada panel recibe solo las props que necesita; ninguno conoce el estado global.
@@ -306,7 +307,7 @@ export function SourceTransformPanel({ resultado, loading, error, netlist, onCal
             <input
               style={{ ...INPUT_STYLE, width: 100 }}
               value={sourceId}
-              onChange={(e) => setSourceId(e.target.value)}
+              onChange={(e) => setSourceId(e.target.value.toUpperCase())}
               placeholder="ej. V1"
             />
           )}
@@ -370,7 +371,7 @@ function DivisorRow({ compId, onCompIdChange, placeholder, loading, onCalculate,
         <input
           style={{ ...INPUT_STYLE, width: 100 }}
           value={compId}
-          onChange={(e) => onCompIdChange(e.target.value)}
+          onChange={(e) => onCompIdChange(e.target.value.toUpperCase())}
           placeholder={placeholder}
         />
       </div>

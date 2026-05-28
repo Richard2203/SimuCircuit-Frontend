@@ -40,6 +40,7 @@ const INITIAL_STATE = {
   circuitosApi: [],
   componentesCatalogo: [],
   teoremaResultado: null,
+  teoremaErrorTipo: null,     // 'thevenin-norton' | 'superposicion' | 'transformacion-fuente' — a que panel pertenece simError
   analisisResultado: null,    // ultimo resultado de /api/analisis/*
   analisisError: null,       // error de validacio de /api/analisis/*
   filters: {
@@ -138,6 +139,9 @@ class SimuCircuitMediator {
           procedimientoTRAN: null,
           simError: null,
           teoremaResultado: null,
+          teoremaErrorTipo: null,
+          analisisResultado: null,
+          analisisError: null,
           openAccordions: {},
         };
         break;
@@ -160,6 +164,9 @@ class SimuCircuitMediator {
           procedimientoTRAN: null,
           simError: null,
           teoremaResultado: null,
+          teoremaErrorTipo: null,
+          analisisResultado: null,
+          analisisError: null,
         };
         break;
 
@@ -289,6 +296,9 @@ class SimuCircuitMediator {
         procedimientoTRAN: null,
         simError:        null,
         teoremaResultado: null,
+        teoremaErrorTipo: null,
+        analisisResultado: null,
+        analisisError:    null,
         openAccordions:  {},
       };
       this._bus.publish('circuito:cargado', circuit);
@@ -334,6 +344,7 @@ class SimuCircuitMediator {
     this._bus.publish('simulacion:iniciada', { tipo: 'DC', netlist: netlistJSON });
     this._setLoading('simulacionDC', true);
     this._state.simError = null;
+    this._state.teoremaErrorTipo = null;
 
     try {
       const { resultado, procedimiento } = await SimulacionService.simularDC({ netlist: netlistJSON, nombre_circuito, id });
@@ -362,6 +373,7 @@ class SimuCircuitMediator {
     this._bus.publish('simulacion:iniciada', { tipo: 'AC', netlist: netlistJSON });
     this._setLoading('simulacionAC', true);
     this._state.simError = null;
+    this._state.teoremaErrorTipo = null;
 
     try {
       const { resultado, procedimiento } = await SimulacionService.simularAC({
@@ -394,6 +406,7 @@ class SimuCircuitMediator {
     this._bus.publish('simulacion:iniciada', { tipo: 'TRAN', netlist: netlistJSON });
     this._setLoading('simulacionTRAN', true);
     this._state.simError = null;
+    this._state.teoremaErrorTipo = null;
 
     try {
       const { resultado, procedimiento } = await SimulacionService.simularTransitorio({
@@ -421,6 +434,7 @@ class SimuCircuitMediator {
 
     this._setLoading('teorema', true);
     this._state.simError = null;
+    this._state.teoremaErrorTipo = null;
 
     try {
       const resultado = await TeoremasService.calcularTheveninNorton({
@@ -431,6 +445,7 @@ class SimuCircuitMediator {
       this._state.teoremaResultado = { tipo: 'thevenin-norton', ...resultado };
     } catch (err) {
       this._state.simError = err.message;
+      this._state.teoremaErrorTipo = 'thevenin-norton';
       console.error('[Mediator] Error en Thévenin/Norton:', err);
     } finally {
       this._setLoading('teorema', false);
@@ -444,6 +459,7 @@ class SimuCircuitMediator {
 
     this._setLoading('teorema', true);
     this._state.simError = null;
+    this._state.teoremaErrorTipo = null;
 
     try {
       const resultado = await TeoremasService.calcularSuperposicion({
@@ -455,6 +471,7 @@ class SimuCircuitMediator {
       this._state.teoremaResultado = { tipo: 'superposicion', ...resultado };
     } catch (err) {
       this._state.simError = err.message;
+      this._state.teoremaErrorTipo = 'superposicion';
       console.error('[Mediator] Error en Superposición:', err);
     } finally {
       this._setLoading('teorema', false);
@@ -471,6 +488,7 @@ class SimuCircuitMediator {
     const nombre_circuito = opciones.nombre_circuito ?? this._nombreCircuitoActual();
     this._setLoading('teorema', true);
     this._state.simError = null;
+    this._state.teoremaErrorTipo = null;
     try {
       const resultado = await TeoremasService.transformarFuente({
         fuenteId: opciones.fuenteId,
@@ -480,6 +498,7 @@ class SimuCircuitMediator {
       this._state.teoremaResultado = { tipo: 'transformacion-fuente', ...resultado };
     } catch (err) {
       this._state.simError = err.message;
+      this._state.teoremaErrorTipo = 'transformacion-fuente';
       console.error('[Mediator] Error en transformación de fuente:', err);
     } finally {
       this._setLoading('teorema', false);

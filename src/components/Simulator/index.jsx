@@ -47,6 +47,7 @@ export function Simulator({ state, dispatch, api }) {
     loading,
     netlist,
     teoremaResultado,
+    teoremaErrorTipo,
     analisisResultado,
     analisisError,
     procedimientoDC,
@@ -241,6 +242,7 @@ export function Simulator({ state, dispatch, api }) {
                 netlist={netlist}
                 analisisResultado={analisisResultado}
                 teoremaResultado={teoremaResultado}
+                teoremaErrorTipo={teoremaErrorTipo}
                 simResultadoDC={simResultadoDC}
                 procedimientoDC={procedimientoDC}
                 procedimientoAC={procedimientoAC}

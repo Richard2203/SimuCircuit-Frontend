@@ -164,17 +164,20 @@ export function buildDCVoltageConfig({ nodos }) {
 
 /**
  * Corrientes de rama DC (grafica de puntos discretos por componente).
+ * `ramas` viene como [etiquetaCompleta, valor], donde la etiqueta ya incluye
+ * el tipo de corriente (p. ej. "I(R1)", "Ic(Q1)", "I_in(U1)"), de modo que
+ * los componentes de 3 pines (BJT/FET/reguladores) muestran sus 3 corrientes.
  * @param {{ ramas: [string, number][] }} params
  */
 export function buildDCCurrentConfig({ ramas }) {
   return {
     type: 'line',
     data: {
-      labels: ramas.map(([k]) => `I(${k})`),
-      datasets: ramas.map(([comp, val], idx) =>
+      labels: ramas.map(([label]) => label),
+      datasets: ramas.map(([label, val], idx) =>
         discretePointDataset({
-          label:    `I(${comp})`,
-          data:     ramas.map(([c]) => (c === comp ? Number(val) : null)),
+          label,
+          data:     ramas.map(([l]) => (l === label ? Number(val) : null)),
           colorIdx: idx + 2,
         })
       ),

@@ -144,8 +144,7 @@ export function TeoremasPanel({ tipo, resultado, loading, error, onCalcular }) {
           </label>
           <input
             value={compId}
-            onChange={(e) => setCompId(e.target.value)}
-            onKeyUp= {(e) => setCompId(e.target.value.toUpperCase())}
+            onChange={(e) => setCompId(e.target.value.toUpperCase())}
             placeholder={tipo === 'thevenin-norton' ? 'ej. RL' : 'ej. R3'}
             style={{
               background: '#1e1e2e',

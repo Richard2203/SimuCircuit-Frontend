@@ -16,6 +16,7 @@ import {
 
 import { useChart }           from '../../hooks/useChart.js';
 import { fmtHz, fmtT, fmtV, corrienteEscalar, extraerMetadatos } from '../../utils/Chartconfig.js';
+import { expandirCorrientes } from '../../utils/format.js';
 import {
   buildDCVoltageConfig,
   buildDCCurrentConfig,
@@ -43,9 +44,11 @@ function DCVoltageChart({ dcData }) {
   return <canvas ref={ref} style={{ width: '100%', height: 200 }} />;
 }
 
-function DCCurrentChart({ dcData }) {
+function DCCurrentChart({ dcData, netlist }) {
   const ref   = useRef(null);
-  const ramas = Object.entries(dcData.currents ?? {}).filter(([, v]) => Math.abs(v) > 1e-12);
+  const ramas = expandirCorrientes(dcData.currents ?? {}, netlist)
+    .filter(({ value }) => Math.abs(Number(value)) > 1e-12)
+    .map(({ label, value }) => [label, value]);
 
   useChart(ref, buildDCCurrentConfig({ ramas }), [dcData]);
   if (ramas.length === 0) return null;
@@ -208,7 +211,7 @@ export function WaveformChart({ circuit, isActive, acData, dcData, tranData, net
       {!hasTRAN && !hasAC && hasDC && (
         <>
           <ChartWrap><DCVoltageChart dcData={dcData} /></ChartWrap>
-          <ChartWrap><DCCurrentChart dcData={dcData} /></ChartWrap>
+          <ChartWrap><DCCurrentChart dcData={dcData} netlist={netlist} /></ChartWrap>
         </>
       )}
 
