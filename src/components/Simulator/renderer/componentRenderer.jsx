@@ -158,24 +158,20 @@ export function renderComponent(comp, energized = false, dcResults = null, tranR
         const nAnodo  = String(comp.nodes?.n1?.nodo ?? comp.nodes?.n1 ?? '');
         const nCatodo = String(comp.nodes?.n2?.nodo ?? comp.nodes?.n2 ?? '');
 
-        // Voltaje de umbral del LED. Prioridad:
-        //   1. params.caida_tension de la netlist (es lo que el motor BACKEND usa
-        //      en el modelo del diodo, así que es el valor "verdadero").
-        //   2. tabla LED_COLORS por color.
-        // Restamos un pequeño margen (0.05V) porque en simulación el voltaje queda
-        // EXACTAMENTE igual al vf nominal, y un `vDiodo >= vf` estricto a veces
-        // falla por la última cifra decimal (ej. vDiodo=1.76V vs vf=1.8V).
-        const colorKey = (comp.value || 'VERDE').trim().toUpperCase();
-        const colorDef = LED_COLORS.find(c => c.value === colorKey) || LED_COLORS.find(c => c.value === 'VERDE');
-        const caidaTension = Number(comp.params?.caida_tension);
-        const vfNominal = (Number.isFinite(caidaTension) && caidaTension > 0)
-          ? caidaTension
+        // Umbral de encendido 
+        // Usamos params.caida_tension como umbral
+        const colorKey = String(comp.value ?? 'VERDE').trim().toUpperCase();
+        const colorDef =
+          LED_COLORS.find(c => c.value === colorKey) ||
+          LED_COLORS.find(c => c.label.toUpperCase() === colorKey) ||
+          LED_COLORS.find(c => c.value === 'VERDE');
+
+        const ctParam = Number(comp.params?.caida_tension);
+        const vf = (Number.isFinite(ctParam) && ctParam > 0)
+          ? ctParam
           : (colorDef?.vf ?? 2.0);
-        const vf = Math.max(0, vfNominal - 0.05);
 
         // PRIORIDAD: si hay resultados transitorios, animar el LED recorriendo
-        // los snapshots. Esto es lo correcto para circuitos de switching donde
-        // el AC sweep en pequeña señal no captura el on/off del LED.
         if (energized && Array.isArray(tranResults) && tranResults.length > 0) {
           return (
             <AnimatedLED
@@ -196,14 +192,12 @@ export function renderComponent(comp, energized = false, dcResults = null, tranR
           );
         }
 
-        // Fallback: con resultado DC, evaluamos el umbral estáticamente.
-        let ledOn = energized; // fallback adicional: si tampoco hay DC, usar energized
-
+        // DC: encender si el voltaje en bornes alcanza el umbral.
+        let ledOn = false;
         if (energized && dcResults?.voltages) {
-          const vAnodo  = dcResults.voltages[nAnodo]  ?? 0;
-          const vCatodo = dcResults.voltages[nCatodo] ?? 0;
-          const vDiodo  = vAnodo - vCatodo;
-          ledOn = vDiodo >= vf;
+          const vAnodo  = Number(dcResults.voltages[nAnodo])  || 0;
+          const vCatodo = Number(dcResults.voltages[nCatodo]) || 0;
+          ledOn = (vAnodo - vCatodo) >= vf;
         }
         return (
           <g key={comp.id}>
@@ -214,13 +208,6 @@ export function renderComponent(comp, energized = false, dcResults = null, tranR
           </g>
         );
       }
-      // FIX (rotacion vertical): el `wrapRotation` del padre YA aplica la
-      // rotacion completa al grupo. Si ademas pasamos `orientation='vertical'`,
-      // DiodoRectificador aplicaria una segunda rotacion interna y el cuerpo
-      // del diodo terminaria a 180° respecto a donde geometry.getPins() lo
-      // ubica, haciendo que los cables NO toquen las patitas.
-      // La solucion correcta es dejar el modelo siempre en orientacion
-      // 'horizontal' y que el wrap lo rote a la posicion final.
       return (
         <g key={comp.id} transform={wrapRotation}>
           <DiodoRectificador x={x} y={y} scale={SCALE_DEFAULT} orientation="horizontal"

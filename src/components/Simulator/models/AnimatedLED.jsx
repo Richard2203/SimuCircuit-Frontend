@@ -68,12 +68,9 @@ export function AnimatedLED({
       const tSim = tMin + (elapsedSim % duracion);
 
       const snap = snapshotEn(tSim);
-      // Los voltajes pueden venir como numeros planos o como objetos {re,im}.
-      // El TransientAnalysis del backend devuelve numeros planos (reales).
       const vA = readVoltage(snap?.voltajes, nAnodo);
       const vC = readVoltage(snap?.voltajes, nCatodo);
-      const vDiodo = vA - vC;
-      const nuevoEstado = vDiodo >= vf;
+      const nuevoEstado = (vA - vC) >= vf;
 
       // Solo llamamos setLedOn cuando el estado realmente cambia, para
       // evitar re-renders innecesarios de React en cada frame.

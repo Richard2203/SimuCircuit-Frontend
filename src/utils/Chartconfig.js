@@ -142,6 +142,16 @@ function sweepLineDataset({ label, data, colorIdx, fill = false, dashed = false 
  * @param {{ nodos: [string, number][] }} params
  */
 export function buildDCVoltageConfig({ nodos }) {
+  const vals = nodos.map(([, v]) => Number(v)).filter(Number.isFinite);
+  const maxV = vals.length ? Math.max(...vals) : 0;
+  const minV = vals.length ? Math.min(...vals) : 0;
+  const magMax = Math.max(Math.abs(maxV), Math.abs(minV));
+  const casiIguales = vals.length > 1 && (magMax === 0 || (maxV - minV) <= magMax * 1e-6);
+
+  const yScale = casiIguales
+    ? { suggestedMin: Math.min(0, minV), suggestedMax: magMax > 0 ? magMax * 1.25 : 1 }
+    : {};
+
   return {
     type: 'line',
     data: {
@@ -158,6 +168,7 @@ export function buildDCVoltageConfig({ nodos }) {
       title:            'Voltajes nodales (DC)',
       yTitle:           'Voltaje (V)',
       tooltipCallbacks: { label: (i) => ` ${i.dataset.label}: ${fmtV(i.parsed.y)}` },
+      extraScales:      { y: yScale },
     }),
   };
 }
@@ -170,6 +181,17 @@ export function buildDCVoltageConfig({ nodos }) {
  * @param {{ ramas: [string, number][] }} params
  */
 export function buildDCCurrentConfig({ ramas }) {
+  const vals = ramas.map(([, v]) => Math.abs(Number(v))).filter(Number.isFinite);
+  const maxAbs = vals.length ? Math.max(...vals) : 0;
+  const minAbs = vals.length ? Math.min(...vals) : 0;
+  const spread = maxAbs - minAbs;
+  // "Casi iguales" = la dispersion es insignificante frente a la magnitud.
+  const casiIguales = vals.length > 1 && (maxAbs === 0 || spread <= maxAbs * 1e-6);
+
+  const yScale = casiIguales
+    ? { min: 0, suggestedMax: maxAbs > 0 ? maxAbs * 1.25 : 1 }
+    : {};
+
   return {
     type: 'line',
     data: {
@@ -186,6 +208,7 @@ export function buildDCCurrentConfig({ ramas }) {
       title:            'Corrientes de rama (DC)',
       yTitle:           'Corriente (A)',
       tooltipCallbacks: { label: (i) => ` ${i.dataset.label}: ${fmtA(i.parsed.y)}` },
+      extraScales:      { y: yScale },
     }),
   };
 }

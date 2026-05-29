@@ -66,7 +66,8 @@ export const LED = ({
   const pinCatodo = localToAbsolute( 18, 95);
 
   const handleColorChange = (newColor) => {
-    setColorValue(newColor);
+    const def = getColorByValue(newColor);
+    setColorValue(newColor, { caida_tension: String(def.vf) });
     onValueChange?.(newColor);
     setPickerOpen(false);
   };
