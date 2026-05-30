@@ -14,6 +14,7 @@ import {
 } from './Circuitlayout';
 
 const DIFICULTADES_DEFAULT = ['Básico', 'Intermedio', 'Avanzado'];
+const TIPOS_DEFAULT = ['Serie', 'Paralelo', 'Mixto'];
 
 /**
  * Extrae el digito-prefijo de una unidad tematica y se filtran los temas (categorias)
@@ -156,6 +157,7 @@ export function FormularioCircuito({
     materia:         circuitoNorm?.materia ?? '',
     unidad_tematica: circuitoNorm?.unidad_tematica ?? '',
     tema:            circuitoNorm?.tema ?? '',
+    tipo:            circuitoNorm?.tipo ?? ''
   });
 
   const [componentes, setComponentes] = useState(() => {
@@ -194,6 +196,26 @@ export function FormularioCircuito({
 
   /** Array de temas actualmente seleccionados (derivado del string meta.tema). */
   const temasSeleccionados = useMemo(() => temasFromString(meta.tema), [meta.tema]);
+
+  // // Para tipo componente
+  // // Diccionario traductor de tipos internos a etiquetas legibles para los filtros
+  // const DICCIONARIO_COMPONENTES = {
+  //   resistencia: 'Resistencia',
+  //   resistencia_variable: 'Resistencia Variable',
+  //   capacitor: 'Capacitor',
+  //   bobina: 'Bobina',
+  //   diodo: 'Diodo',
+  //   transistor_bjt: 'Transistor BJT',
+  //   transistor_fet: 'Transistor FET',
+  //   regulador_voltaje: 'Regulador de Voltaje',
+  //   fuente_voltaje: 'Fuente de Voltaje',
+  //   fuente_corriente: 'Fuente de Corriente'
+  // };
+
+  // // 2. Extraemos los tipos, los traducimos, y quitamos duplicados
+  // const tiposComponentes = [...new Set(
+  //   componentes.map((c) => DICCIONARIO_COMPONENTES[c.type] || c.type)
+  // )];
 
   const tiposComponentes = [...new Set(componentes.map((c) => c.type))];
 
@@ -402,6 +424,15 @@ export function FormularioCircuito({
               value={meta.descripcion}
               onChange={(e) => setField('descripcion', e.target.value)}
               rows={3} placeholder="Descripción del circuito" />
+          </Field>
+
+          <Field label="tipo">
+              <select className="admin-select"
+                value={meta.tipo}
+                onChange={(e) => setField('tipo', e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {TIPOS_DEFAULT.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
           </Field>
 
           <div className="admin-two-col">
